@@ -27,7 +27,7 @@ if errorlevel 1 (
     set "PYTHON_CMD=python"
 )
 
-echo [OK] Python: 
+echo [OK] Python:
 %PYTHON_CMD% --version
 
 :: Verifica se venv já existe

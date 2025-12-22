@@ -2,10 +2,8 @@
 Conversor de WebP para JPG.
 """
 
-import subprocess
-import shutil
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 
 from PIL import Image
 

@@ -73,7 +73,7 @@ Os scripts criam automaticamente o ambiente virtual e instalam todas as dependê
 
 ### Método Manual
 
-### Windows
+#### Windows
 
 #### 1. Criar o ambiente virtual
 
@@ -279,6 +279,7 @@ python-tools/
 Execute `scripts/start.bat` (Windows) ou `scripts/start.sh` (Linux/macOS) e escolha uma opção:
 
 **Imagens:**
+
 1. **Otimizar Imagens**: Processa JPG, PNG, WebP, AVIF, HEIC na pasta `entrada/imagens/`
 2. **Validar Imagens**: Analisa imagens em `entrada/downloads/` e separa em legíveis/ilegíveis
 3. **Converter WebP → JPG**: Converte WebP para JPG na pasta `entrada/imagens/`
@@ -332,6 +333,7 @@ python3 otimizador-imagens.py
 ### Scripts Disponíveis
 
 **Imagens:**
+
 ```bash
 python otimizador-imagens.py          # Otimizar imagens (JPG, PNG, WebP, AVIF, HEIC)
 python validate-images.py              # Validar imagens (separar legíveis/ilegíveis)
@@ -344,6 +346,7 @@ python gerador-thumbnails.py          # Gerar thumbnails
 ```
 
 **Vídeos:**
+
 ```bash
 python otimizador-video.py            # Otimizar vídeos (MP4, M4V, MOV)
 python webm-mp4.py                    # Converter WebM para MP4
