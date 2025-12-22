@@ -289,14 +289,7 @@ Execute `scripts/start.bat` (Windows) ou `scripts/start.sh` (Linux/macOS) e esco
 7. **Corretor de Cores**: Ajusta brilho, contraste e aplica filtros
 8. **Gerar Thumbnails**: Gera thumbnails de imagens e vídeos
 
-**Vídeos:**
-9. **Otimizar Vídeos**: Processa MP4, M4V e MOV na pasta `entrada/videos/`
-10. **Converter WebM → MP4**: Converte WebM para MP4 na pasta `entrada/videos/`
-11. **Extrair Áudio**: Extrai áudio de vídeos (MP3, AAC, OGG, WAV)
-12. **Extrair Thumbnails**: Extrai thumbnails de vídeos
-13. **Merge Vídeos**: Concatena múltiplos vídeos
-14. **Estabilizador**: Estabiliza vídeos tremidos
-15. **Detectar Duplicatas de Vídeos**: Encontra vídeos duplicados
+**Vídeos:** 9. **Otimizar Vídeos**: Processa MP4, M4V e MOV na pasta `entrada/videos/` 10. **Converter WebM → MP4**: Converte WebM para MP4 na pasta `entrada/videos/` 11. **Extrair Áudio**: Extrai áudio de vídeos (MP3, AAC, OGG, WAV) 12. **Extrair Thumbnails**: Extrai thumbnails de vídeos 13. **Merge Vídeos**: Concatena múltiplos vídeos 14. **Estabilizador**: Estabiliza vídeos tremidos 15. **Detectar Duplicatas de Vídeos**: Encontra vídeos duplicados
 
 ### Via Linha de Comando
 
