@@ -1,0 +1,268 @@
+########################################################
+# GITIGNORE UNIVERSAL - Node.js, PHP, Python, Go, etc #
+########################################################
+
+##########################
+# SISTEMAS OPERACIONAIS #
+##########################
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+##################
+# ARQUIVOS LOGS  #
+##################
+*.log
+logs/
+log/
+
+##################
+# ARQUIVOS DE TEMPORÁRIO #
+##################
+*.tmp
+*.bak
+*.swp
+*.swo
+*.swn
+*.old
+*~
+*.orig
+
+########################
+# BINÁRIOS E COMPILADOS #
+########################
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.a
+*.out
+*.pyc
+*.pyo
+*.pyd
+*.dSYM/
+*.dylib
+*.node
+*.wasm
+
+##################
+# ARQUIVOS DE PACOTES #
+##################
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+*.tgz
+*.xz
+
+#################
+# BACKUPS E PATCHES #
+#################
+*.bak
+*.tmp
+*.patch
+*.diff
+*.swp
+
+#################
+# AMBIENTE LOCAL #
+#################
+.env
+.env.*
+!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+#################
+# DIRETÓRIOS COMUNS #
+#################
+node_modules/
+vendor/
+bower_components/
+build/
+dist/
+tmp/
+.cache/
+coverage/
+logs/
+.pnp/
+.pnp.js
+.yarn/
+.yarnrc.yml
+
+#################
+# ESPECÍFICO NODE.JS #
+#################
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+yarn.lock
+package-lock.json
+
+#################
+# ESPECÍFICO PYTHON #
+#################
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.tox/
+.mypy_cache/
+.pyre/
+coverage.xml
+
+# Ambiente virtual
+venv/
+env/
+ENV/
+.venv/
+
+#################
+# ESPECÍFICO PHP #
+#################
+composer.lock
+vendor/
+.env
+.phpunit.result.cache
+.php_cs.cache
+
+#################
+# ESPECÍFICO GO #
+#################
+*.test
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.out
+/go.sum
+/go.mod
+/vendor/
+bin/
+*.a
+
+#################
+# TYPESCRIPT #
+#################
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+#################
+# NEXT.JS / REACT #
+#################
+.next/
+out/
+.storybook/
+storybook-static/
+.eslintcache
+
+#################
+# DOCKER #
+#################
+docker-compose.override.yml
+.docker/
+*.dockerfile
+Dockerfile.local
+*.tar
+
+#################
+# VERCE / NETLIFY #
+#################
+.vercel/
+.netlify/
+firebase.json
+firestore.indexes.json
+firestore.rules
+
+#################
+# PM2 #
+#################
+ecosystem.config.js
+ecosystem.config.cjs
+ecosystem.config.json
+
+#################
+# IDEs #
+#################
+# JetBrains
+.idea/
+*.iml
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Sublime
+*.sublime-workspace
+*.sublime-project
+
+# Eclipse
+*.metadata/
+*.classpath
+*.project
+*.settings/
+
+#################
+# OUTROS #
+#################
+*.pem
+*.crt
+*.key
+*.cert
+*.sublime-*
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Arquivos de lock em geral
+*.lock
+
+# Arquivos de migração ou dumps
+*.sql
+*.dump
+
+# Arquivos de cache específicos
+.cache/
+.nyc_output/
+
+# Pastas de entrada e saída (mantém apenas .gitkeep)
+entrada/**/*
+!entrada/**/.gitkeep
+saida/**/*
+!saida/**/.gitkeep
+
+# Logs de processamento
+historico_processamento.log
+*.log
+
+##########################
+# IGNORAR TUDO EXCETO... #
+##########################
+# Exemplo de uso:
+# !important-file.txt
