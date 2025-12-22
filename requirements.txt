@@ -37,10 +37,9 @@
 #   - Usado em: otimizador-imagens.py, webp-to-jpg.py
 Pillow>=10.2.0
 
-# pillow-heif: Suporte para HEIC/HEIF (opcional)
+# pillow-heif: Suporte para HEIC/HEIF
 #   - Usado em: otimizador-imagens.py (para converter HEIC/HEIF)
-#   - Instalar apenas se precisar processar arquivos HEIC/HEIF
-# pillow-heif>=0.13.0
+pillow-heif>=0.13.0
 
 # ============================================
 # PROCESSAMENTO DE VÍDEOS E ANÁLISE DE IMAGENS
@@ -52,6 +51,22 @@ opencv-python>=4.12.0
 # NumPy: Biblioteca para computação numérica
 #   - Usado em: validate-images.py, estabilizador-video.py (análise de imagens)
 numpy>=2.2.0
+
+# ============================================
+# OCR E PROCESSAMENTO AVANÇADO
+# ============================================
+# pytesseract: OCR para detecção de texto em imagens
+#   - Usado em: ocr-imagens.py
+#   - Requer Tesseract OCR instalado no sistema
+#   - Windows: https://github.com/UB-Mannheim/tesseract/wiki
+#   - Linux: sudo apt-get install tesseract-ocr tesseract-ocr-por
+#   - macOS: brew install tesseract tesseract-lang
+pytesseract>=0.3.10
+
+# rembg: Remoção automática de fundo
+#   - Usado em: remover-fundo.py
+#   - Nota: A primeira execução baixará o modelo (~170MB)
+rembg>=2.0.50
 
 # ============================================
 # UTILITÁRIOS
@@ -67,22 +82,3 @@ python-dotenv>=1.0.0
 # requests: Biblioteca HTTP para requisições
 #   - Usado para funcionalidades futuras (downloads, APIs, etc.)
 requests>=2.31.0
-
-# ============================================
-# DEPENDÊNCIAS OPCIONAIS (descomente se necessário)
-# ============================================
-# Instale apenas se precisar das funcionalidades específicas:
-#
-# pillow-heif>=0.13.0  # Para suporte HEIC/HEIF (otimizador-imagens.py)
-#   Instalar: pip install pillow-heif
-#
-# pytesseract>=0.3.10  # Para OCR (ocr-imagens.py - requer Tesseract instalado)
-#   Instalar: pip install pytesseract
-#   E instale Tesseract OCR no sistema:
-#   - Windows: https://github.com/UB-Mannheim/tesseract/wiki
-#   - Linux: sudo apt-get install tesseract-ocr tesseract-ocr-por
-#   - macOS: brew install tesseract tesseract-lang
-#
-# rembg>=2.0.50  # Para remoção de fundo (remover-fundo.py)
-#   Instalar: pip install rembg
-#   Nota: A primeira execução baixará o modelo (~170MB)
