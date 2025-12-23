@@ -33,6 +33,17 @@ Execute o script `start.bat` (Windows) ou `start.sh` (Linux/macOS) e selecione a
 python otimizador-video.py
 ```
 
+#### Desabilitar Correções Automáticas
+
+```bash
+# Via argumento
+python otimizador-video.py --sem-correcoes
+
+# Via variável de ambiente
+export CORRIGIR_PROBLEMAS=false
+python otimizador-video.py
+```
+
 ## Configuração
 
 O script está configurado com os seguintes parâmetros padrão:
