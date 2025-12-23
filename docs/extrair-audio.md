@@ -125,3 +125,4 @@ extrator = ExtratorAudio(formato="wav", qualidade="N/A")
 **Problema**: Timeout em vídeos longos
 - **Solução**: Normal para vídeos muito longos. O timeout é de 1 hora por vídeo
 
+

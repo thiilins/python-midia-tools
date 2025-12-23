@@ -107,11 +107,13 @@ corretor.processar()
 ## Troubleshooting
 
 **Problema**: Imagens ficam muito escuras/claras
+
 - **Solução**: Ajuste o parâmetro `brilho` (valores entre 0.8-1.5 geralmente funcionam bem)
 
 **Problema**: Cores ficam saturadas demais
+
 - **Solução**: Reduza o parâmetro `saturacao` para valores entre 0.7-0.9
 
 **Problema**: Filtro não aplica corretamente
-- **Solução**: Verifique se a imagem está em modo RGB (conversão automática)
 
+- **Solução**: Verifique se a imagem está em modo RGB (conversão automática)

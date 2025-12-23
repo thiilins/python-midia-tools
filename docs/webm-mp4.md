@@ -164,3 +164,4 @@ conversor = ConversorWebM(
 **Problema**: Arquivo muito grande
 - **Solução**: Aumente o CRF (ex: "23" ou "26") e use perfil "mobile"
 
+

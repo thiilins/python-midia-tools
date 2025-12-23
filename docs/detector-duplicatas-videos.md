@@ -111,3 +111,4 @@ python detector-duplicatas-videos.py --remover
 **Problema**: Processamento lento
 - **Solução**: Normal para muitos vídeos grandes. O processo usa amostras para otimizar velocidade.
 
+

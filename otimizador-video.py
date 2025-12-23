@@ -46,6 +46,23 @@ def main():
         print("   - VFR (Variable Frame Rate)")
         print("   - Problemas com timestamps")
         print("   - Dessincronia de áudio")
+        print("\n🔧 Controle de Recursos (variáveis de ambiente):")
+        print(
+            "  FFMPEG_THREADS=4          # Número de threads (padrão: 50% dos cores, máx 8)"
+        )
+        print("  LIMITE_CPU=85              # Limite de uso de CPU em % (padrão: 85%)")
+        print(
+            "  LIMITE_MEMORIA=85         # Limite de uso de memória em % (padrão: 85%)"
+        )
+        print(
+            "  PAUSA_ENTRE_VIDEOS=1.0    # Pausa entre vídeos em segundos (padrão: 1.0s)"
+        )
+        print("  USAR_GPU=false            # Usar GPU (padrão: false - usa apenas CPU)")
+        print("\n⚠️  IMPORTANTE: O otimizador agora controla automaticamente o uso de")
+        print(
+            "   recursos para evitar sobrecarga do sistema. Para sistemas com GPU fraca,"
+        )
+        print("   mantenha USAR_GPU=false (padrão).")
         sys.exit(0)
 
     # Verifica preset via variável de ambiente ou argumento
@@ -73,10 +90,10 @@ def main():
         else:
             # Padrão: medium
             otimizador = OtimizadorVideo(
-                preset_nome="high_quality", corrigir_problemas=corrigir_problemas
+                preset_nome="medium", corrigir_problemas=corrigir_problemas
             )
 
-        otimizador.processar(deletar_originais=True)
+        otimizador.processar(deletar_originais=False)
     except KeyboardInterrupt:
         print("\n\n⚠️  Processo interrompido pelo usuário (Ctrl+C)")
         sys.exit(130)

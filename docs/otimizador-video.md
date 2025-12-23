@@ -14,12 +14,15 @@ Ferramenta para otimizar vídeos MP4, M4V e MOV reduzindo tamanho mantendo quali
 - ✅ **Presets pré-configurados**: 5 presets para diferentes necessidades
 - ✅ **Informações detalhadas**: Mostra codec, bitrate, resolução antes/depois
 - ✅ **Barra de progresso**: Acompanhamento em tempo real
+- ✅ **Controle de recursos**: Limita uso de CPU, memória e threads para evitar sobrecarga
+- ✅ **Proteção do sistema**: Pausa entre processamentos e monitoramento de recursos
 
 ## Requisitos
 
 - Python 3.6+
 - FFmpeg
 - FFprobe
+- psutil (para controle de recursos)
 
 ## Uso
 
@@ -153,12 +156,14 @@ otimizador.processar(deletar_originais=True)  # True/False
 ### Detecção de Otimização
 
 Um vídeo é considerado "já otimizado" quando:
+
 - Codec é **H.264** (`h264`)
 - Bitrate total < **5 Mbps** (indica compressão)
 
 ### Correção de Vídeos Otimizados
 
 Vídeos já otimizados que têm problemas são corrigidos automaticamente:
+
 - **VFR**: Re-encoda com filtro `fps` (necessário)
 - **Timestamps/Áudio**: Usa `copy` mode (sem re-encodar, mais rápido)
 
@@ -225,6 +230,58 @@ otimizador = OtimizadorVideo(preset_nome="high_quality")
 otimizador = OtimizadorVideo(crf="18", preset="slow")
 ```
 
+## Controle de Recursos
+
+O otimizador agora inclui controle automático de recursos para evitar sobrecarga do sistema (CPU, memória e GPU). Isso é especialmente importante para sistemas com GPU fraca ou quando processando muitos vídeos.
+
+### Configuração Padrão
+
+- **Threads**: 50% dos cores disponíveis (máximo 8 threads)
+- **Limite CPU**: 85% (aguarda se exceder)
+- **Limite Memória**: 85% (aguarda se exceder)
+- **GPU**: Desabilitada por padrão (usa apenas CPU)
+- **Pausa entre vídeos**: 1 segundo
+
+### Variáveis de Ambiente
+
+Você pode personalizar o controle de recursos usando variáveis de ambiente:
+
+```bash
+# Limitar threads do FFmpeg (padrão: 50% dos cores, máx 8)
+export FFMPEG_THREADS=4
+
+# Limite de uso de CPU em % (padrão: 85%)
+export LIMITE_CPU=80
+
+# Limite de uso de memória em % (padrão: 85%)
+export LIMITE_MEMORIA=80
+
+# Pausa entre vídeos em segundos (padrão: 1.0)
+export PAUSA_ENTRE_VIDEOS=2.0
+
+# Usar GPU (padrão: false - desabilitado)
+# ⚠️ ATENÇÃO: Para GPUs fracas (ex: RX 580), mantenha false
+export USAR_GPU=false
+
+# Executar com as configurações
+python otimizador-video.py
+```
+
+### Recomendações
+
+- **GPU fraca (ex: RX 580)**: Mantenha `USAR_GPU=false` (padrão)
+- **CPU potente (ex: Ryzen 9)**: Pode aumentar `FFMPEG_THREADS` se necessário
+- **Sistema com pouca RAM**: Reduza `LIMITE_MEMORIA` (ex: 70%)
+- **Processamento em background**: Aumente `PAUSA_ENTRE_VIDEOS` (ex: 2.0 ou 3.0)
+
+### Funcionamento do Controle de Recursos
+
+1. **Antes de cada vídeo**: Verifica uso de CPU e memória
+2. **Se recursos excederem limites**: Aguarda até ficarem disponíveis (timeout: 120s)
+3. **Durante processamento**: Usa número limitado de threads
+4. **Entre vídeos**: Pausa para dar tempo ao sistema se recuperar
+5. **Prioridade do processo**: Reduzida (nice=5) para menor impacto no sistema
+
 ## Notas
 
 - ⚠️ **Atenção**: Com `deletar_originais=True`, os arquivos originais são **permanentemente deletados** após otimização
@@ -232,6 +289,7 @@ otimizador = OtimizadorVideo(crf="18", preset="slow")
 - Vídeos já otimizados **com problemas** são corrigidos (sem re-otimizar quando possível)
 - Correções automáticas são habilitadas por padrão
 - O script mostra informações detalhadas de cada vídeo
+- **Controle de recursos**: O otimizador agora protege automaticamente o sistema contra sobrecarga
 
 ## Troubleshooting
 
@@ -254,3 +312,11 @@ otimizador = OtimizadorVideo(crf="18", preset="slow")
 **Problema**: Arquivo muito grande
 
 - **Solução**: Aumente o CRF (ex: "26" ou "28") para maior compressão
+
+**Problema**: Sistema desliga ou trava durante processamento
+
+- **Solução**: O otimizador agora controla recursos automaticamente. Se ainda ocorrer:
+  - Reduza `FFMPEG_THREADS` (ex: `export FFMPEG_THREADS=2`)
+  - Reduza `LIMITE_CPU` (ex: `export LIMITE_CPU=70`)
+  - Aumente `PAUSA_ENTRE_VIDEOS` (ex: `export PAUSA_ENTRE_VIDEOS=3.0`)
+  - Mantenha `USAR_GPU=false` (padrão) para GPUs fracas

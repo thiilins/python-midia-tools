@@ -123,3 +123,4 @@ python validate-images.py --html
 **Problema**: Análise muito lenta
 - **Solução**: Normal para muitas imagens grandes. O processo analisa cada imagem em detalhe
 
+

@@ -121,3 +121,4 @@ tamanhos = ["150x150", "300x300", "600x600"]  # Quadrados
 **Problema**: Thumbnails muito grandes
 - **Solução**: Ajuste os tamanhos no código ou use ferramenta de otimização de imagens
 
+

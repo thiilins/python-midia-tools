@@ -100,3 +100,4 @@ estabilizador.processar()
 **Problema**: Erro ao processar
 - **Solução**: Verifique se o FFmpeg está instalado e no PATH
 
+

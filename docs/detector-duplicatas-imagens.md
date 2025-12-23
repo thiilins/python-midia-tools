@@ -103,3 +103,4 @@ python detector-duplicatas-imagens.py --remover
 **Problema**: Erro ao remover arquivo
 - **Solução**: Verifique permissões de escrita na pasta
 
+

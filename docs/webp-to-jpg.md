@@ -130,3 +130,4 @@ conversor = ConversorWebP(
 **Problema**: Arquivo muito grande
 - **Solução**: Reduza a qualidade (ex: 85 ou 90) ou ative `preservar_qualidade=True` para análise automática
 
+

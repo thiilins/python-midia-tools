@@ -82,3 +82,14 @@ python-dotenv>=1.0.0
 # requests: Biblioteca HTTP para requisições
 #   - Usado para funcionalidades futuras (downloads, APIs, etc.)
 requests>=2.31.0
+
+# ============================================
+# CONTROLE DE RECURSOS
+# ============================================
+# psutil: Monitoramento de sistema e processos
+#   - Usado em: media_tools/common/resource_control.py (controle de CPU/memória)
+psutil>=5.9.0
+
+# imagehash: Hashing de imagens para detecção de duplicatas
+#   - Usado em: detector-duplicatas-imagens.py
+imagehash>=4.3.1

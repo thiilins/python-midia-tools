@@ -14,6 +14,17 @@ from typing import Optional, Dict
 from ..common.paths import criar_pastas, obter_pastas_entrada_saida
 from ..common.progress import ProgressBar
 from ..common.validators import verificar_ffmpeg
+from ..common.resource_control import (
+    obter_configuracao_threads,
+    obter_configuracao_limite_cpu,
+    obter_configuracao_limite_memoria,
+    usar_aceleracao_hardware,
+    obter_pausa_entre_videos,
+    verificar_recursos_disponiveis,
+    aguardar_recursos_disponiveis,
+    definir_prioridade_processo,
+    pausar_entre_processamentos,
+)
 
 
 class OtimizadorVideo:
@@ -106,6 +117,16 @@ class OtimizadorVideo:
             self.preset_nome = None
 
         self.corrigir_problemas = corrigir_problemas
+
+        # Configurações de controle de recursos
+        self.threads = obter_configuracao_threads()
+        self.limite_cpu = obter_configuracao_limite_cpu()
+        self.limite_memoria = obter_configuracao_limite_memoria()
+        self.usar_gpu = usar_aceleracao_hardware()
+        self.pausa_entre_videos = obter_pausa_entre_videos()
+
+        # Define prioridade do processo (menor prioridade = menos impacto no sistema)
+        definir_prioridade_processo(nice=5)
 
     @classmethod
     def listar_presets(cls) -> dict:
@@ -430,16 +451,36 @@ class OtimizadorVideo:
             )
         else:
             # Re-encoda com H.264 (otimização normal ou correção de VFR)
-            comando.extend(
-                [
-                    "-c:v",
-                    "libx264",
-                    "-crf",
-                    self.crf,
-                    "-preset",
-                    self.preset,
-                ]
-            )
+            # Não usa aceleração de hardware por padrão (pode ser fraca ou não disponível)
+            if self.usar_gpu:
+                # Tenta usar GPU (h264_nvenc para NVIDIA, h264_amf para AMD)
+                # Nota: RX 580 pode não ter suporte adequado, então desabilitado por padrão
+                comando.extend(
+                    [
+                        "-c:v",
+                        "libx264",  # Mantém software encoding por segurança
+                        "-crf",
+                        self.crf,
+                        "-preset",
+                        self.preset,
+                        "-threads",
+                        str(self.threads),  # Limita threads para evitar sobrecarga
+                    ]
+                )
+            else:
+                # Encoding via software (CPU) com threads limitadas
+                comando.extend(
+                    [
+                        "-c:v",
+                        "libx264",
+                        "-crf",
+                        self.crf,
+                        "-preset",
+                        self.preset,
+                        "-threads",
+                        str(self.threads),  # Limita threads para evitar sobrecarga
+                    ]
+                )
 
         # Aplica filtros de vídeo se houver (requer re-encodar)
         if filtros_video:
@@ -582,6 +623,13 @@ class OtimizadorVideo:
             print(f"   Configuração: CRF {self.crf} | Preset {self.preset}")
         else:
             print(f"⚙️  Configuração: CRF {self.crf} | Preset {self.preset}")
+        print(f"🔧 Controle de recursos:")
+        print(
+            f"   Threads: {self.threads} | Limite CPU: {self.limite_cpu:.0f}% | Limite Memória: {self.limite_memoria:.0f}%"
+        )
+        print(
+            f"   GPU: {'Habilitada' if self.usar_gpu else 'Desabilitada (uso de CPU apenas)'}"
+        )
         print("-" * 60)
 
         sucessos = 0
@@ -590,6 +638,16 @@ class OtimizadorVideo:
 
         # Processamento sequencial com informações detalhadas
         for i, arquivo_origem in enumerate(arquivos, 1):
+            # Verifica recursos antes de processar
+            if not verificar_recursos_disponiveis(self.limite_cpu, self.limite_memoria):
+                print(
+                    f"\n⏸️  Aguardando recursos disponíveis (CPU < {self.limite_cpu:.0f}%, Memória < {self.limite_memoria:.0f}%)..."
+                )
+                if not aguardar_recursos_disponiveis(
+                    self.limite_cpu, self.limite_memoria, timeout=120.0
+                ):
+                    print("⚠️  Timeout aguardando recursos. Continuando com cautela...")
+
             arquivo_destino = pasta_saida / arquivo_origem.name
 
             # Obtém informações antes
@@ -689,6 +747,10 @@ class OtimizadorVideo:
             else:
                 print(f"   ❌ Erro: {erro}")
                 falhas += 1
+
+            # Pausa entre processamentos para dar tempo ao sistema se recuperar
+            if i < len(arquivos):  # Não pausa após o último vídeo
+                pausar_entre_processamentos(self.pausa_entre_videos)
 
         print("\n" + "=" * 60)
         print("📊 RESUMO DO PROCESSAMENTO")

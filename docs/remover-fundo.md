@@ -100,3 +100,4 @@ python remover-fundo.py
 **Problema**: Arquivo PNG muito grande
 - **Solução**: Use `otimizador-imagens.py` para comprimir os PNGs gerados
 
+

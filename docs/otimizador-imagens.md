@@ -151,3 +151,4 @@ otimizador = OtimizadorImagens(qualidade_jpg=75)
 **Problema**: Arquivo muito grande
 - **Solução**: Reduza a qualidade JPG (ex: 75 ou 80)
 
+

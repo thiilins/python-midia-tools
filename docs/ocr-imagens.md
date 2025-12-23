@@ -115,3 +115,4 @@ python ocr-imagens.py
 **Problema**: OCR muito lento
 - **Solução**: Normal para muitas imagens grandes. O processo pode demorar
 
+

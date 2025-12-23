@@ -117,3 +117,4 @@ merger.processar()
 **Problema**: Vídeo final com resolução diferente
 - **Solução**: Normal se os vídeos originais têm resoluções diferentes. FFmpeg usa a resolução do primeiro vídeo
 
+
