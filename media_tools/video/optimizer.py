@@ -349,7 +349,7 @@ class OtimizadorVideo:
         return problemas
 
     def _converter_video(
-        self, arquivo_entrada: Path, arquivo_saida: Path
+        self, arquivo_entrada: Path, arquivo_saida: Path, apenas_corrigir: bool = False
     ) -> tuple[bool, Optional[str]]:
         """
         Converte o vídeo usando FFmpeg com barra de progresso.
@@ -357,6 +357,7 @@ class OtimizadorVideo:
         Args:
             arquivo_entrada: Caminho do arquivo de entrada.
             arquivo_saida: Caminho do arquivo de saída.
+            apenas_corrigir: Se True, apenas corrige problemas sem re-encodar (usa copy).
 
         Returns:
             Tuple[bool, Optional[str]]: (sucesso, mensagem_erro)
@@ -387,19 +388,27 @@ class OtimizadorVideo:
 
         # Adiciona flags de correção de erros se necessário
         if aplicar_correcoes:
-            comando.extend([
-                "-err_detect",
-                "ignore_err",
-            ])
+            comando.extend(
+                [
+                    "-err_detect",
+                    "ignore_err",
+                ]
+            )
 
-        comando.extend([
-            "-i",
-            str(arquivo_entrada),
-        ])
+        comando.extend(
+            [
+                "-i",
+                str(arquivo_entrada),
+            ]
+        )
 
         # Filtros de vídeo (para correção de VFR)
         filtros_video = []
+        precisa_reencodar_video = False
+        
         if aplicar_correcoes and problemas["vfr"]:
+            # VFR requer re-encodar para aplicar filtro fps
+            precisa_reencodar_video = True
             # Força FPS constante baseado no FPS detectado ou usa 30fps padrão
             info_video = self._obter_info_video(arquivo_entrada)
             fps_alvo = info_video.get("fps", 30)
@@ -410,54 +419,75 @@ class OtimizadorVideo:
             filtros_video.append(f"fps={fps_alvo}")
 
         # Configurações de codificação
-        comando.extend([
-            "-c:v",
-            "libx264",
-            "-crf",
-            self.crf,
-            "-preset",
-            self.preset,
-        ])
+        if apenas_corrigir and not precisa_reencodar_video:
+            # Se apenas corrigir e não precisa re-encodar vídeo, usa copy
+            # (apenas timestamps/áudio, sem VFR)
+            comando.extend(
+                [
+                    "-c:v",
+                    "copy",
+                ]
+            )
+        else:
+            # Re-encoda com H.264 (otimização normal ou correção de VFR)
+            comando.extend(
+                [
+                    "-c:v",
+                    "libx264",
+                    "-crf",
+                    self.crf,
+                    "-preset",
+                    self.preset,
+                ]
+            )
 
-        # Aplica filtros de vídeo se houver
+        # Aplica filtros de vídeo se houver (requer re-encodar)
         if filtros_video:
             comando.extend(["-filter:v", ",".join(filtros_video)])
 
         # Áudio com correções se necessário
         filtro_audio = "aresample=async=1" if aplicar_correcoes else None
 
-        comando.extend([
-            "-c:a",
-            "aac",
-            "-b:a",
-            "128k",
-        ])
+        comando.extend(
+            [
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+            ]
+        )
 
         if filtro_audio:
             comando.extend(["-af", filtro_audio])
 
         # Flags adicionais para correção
-        comando.extend([
-            "-movflags",
-            "+faststart",
-            "-pix_fmt",
-            "yuv420p",
-        ])
+        comando.extend(
+            [
+                "-movflags",
+                "+faststart",
+                "-pix_fmt",
+                "yuv420p",
+            ]
+        )
 
         if aplicar_correcoes:
             # Flags para corrigir timestamps e problemas de sincronia
-            comando.extend([
-                "-fflags",
-                "+genpts+igndts",
-                "-max_muxing_queue_size",
-                "4096",
-            ])
+            comando.extend(
+                [
+                    "-fflags",
+                    "+genpts+igndts",
+                    "-max_muxing_queue_size",
+                    "4096",
+                ]
+            )
 
-        comando.extend([
-            "-progress",
-            "pipe:1",
-            str(arquivo_saida),
-        ])
+        comando.extend(
+            [
+                "-progress",
+                "pipe:1",
+                str(arquivo_saida),
+            ]
+        )
 
         # Regex para capturar o tempo processado
         regex_tempo = re.compile(r"out_time=(\d{2}:\d{2}:\d{2}\.\d+)")
@@ -554,7 +584,38 @@ class OtimizadorVideo:
             info_antes = self._obter_info_video(arquivo_origem)
 
             # Verifica se já está otimizado
-            if self._ja_otimizado(info_antes, self.crf):
+            ja_otimizado = self._ja_otimizado(info_antes, self.crf)
+
+            # Se está otimizado, verifica se tem problemas que precisam correção
+            if ja_otimizado and self.corrigir_problemas:
+                problemas = self._detectar_problemas(arquivo_origem)
+                tem_problemas = any(problemas.values())
+
+                if not tem_problemas:
+                    # Está otimizado E sem problemas - pode pular
+                    print(f"\n[{i}/{len(arquivos)}] ⏭️  {arquivo_origem.name}: já otimizado")
+                    print(
+                        f"   Info: {info_antes['width']}x{info_antes['height']} | "
+                        f"{info_antes['codec']} | "
+                        f"{info_antes['bitrate_total']:.0f}kbps"
+                        if info_antes.get("bitrate_total")
+                        else "N/A"
+                    )
+                    pulados += 1
+                    continue
+                else:
+                    # Está otimizado MAS tem problemas - precisa corrigir
+                    print(f"\n[{i}/{len(arquivos)}] 🔧 {arquivo_origem.name}: otimizado, mas com problemas")
+                    print(
+                        f"   Info: {info_antes['width']}x{info_antes['height']} | "
+                        f"{info_antes['codec']} | "
+                        f"{info_antes['bitrate_total']:.0f}kbps"
+                        if info_antes.get("bitrate_total")
+                        else "N/A"
+                    )
+                    print(f"   ⚠️  Aplicando apenas correções (sem re-otimizar)")
+            elif ja_otimizado and not self.corrigir_problemas:
+                # Está otimizado e correções desabilitadas - pode pular
                 print(f"\n[{i}/{len(arquivos)}] ⏭️  {arquivo_origem.name}: já otimizado")
                 print(
                     f"   Info: {info_antes['width']}x{info_antes['height']} | "
@@ -568,7 +629,11 @@ class OtimizadorVideo:
 
             tamanho_original = arquivo_origem.stat().st_size / (1024 * 1024)
 
-            print(f"\n[{i}/{len(arquivos)}] 📹 {arquivo_origem.name}")
+            # Determina se deve apenas corrigir (sem re-encodar)
+            apenas_corrigir = ja_otimizado and self.corrigir_problemas
+
+            if not apenas_corrigir:
+                print(f"\n[{i}/{len(arquivos)}] 📹 {arquivo_origem.name}")
             print(
                 f"   Antes: {info_antes['width']}x{info_antes['height']} | "
                 f"{info_antes['codec']} | "
@@ -577,7 +642,9 @@ class OtimizadorVideo:
                 else "N/A"
             )
 
-            sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino)
+            sucesso, erro = self._converter_video(
+                arquivo_origem, arquivo_destino, apenas_corrigir=apenas_corrigir
+            )
 
             if sucesso and arquivo_destino.exists():
                 info_depois = self._obter_info_video(arquivo_destino)
