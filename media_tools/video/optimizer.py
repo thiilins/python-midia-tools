@@ -405,7 +405,7 @@ class OtimizadorVideo:
         # Filtros de vídeo (para correção de VFR)
         filtros_video = []
         precisa_reencodar_video = False
-        
+
         if aplicar_correcoes and problemas["vfr"]:
             # VFR requer re-encodar para aplicar filtro fps
             precisa_reencodar_video = True
@@ -520,10 +520,22 @@ class OtimizadorVideo:
                             tempo_atual_str
                         )
 
+                        # Limita ao total para evitar ultrapassar 100%
+                        tempo_atual_seg = min(tempo_atual_seg, duracao_total)
+
                         incremento = tempo_atual_seg - tempo_anterior
                         if incremento > 0:
-                            pbar.update(incremento)
+                            # Garante que não ultrapasse o total
+                            if pbar.n + incremento > int(duracao_total):
+                                incremento = int(duracao_total) - pbar.n
+                            
+                            if incremento > 0:
+                                pbar.update(incremento)
                             tempo_anterior = tempo_atual_seg
+                
+                # Garante que a barra chegue a 100% ao finalizar
+                if pbar.n < int(duracao_total):
+                    pbar.update(int(duracao_total) - pbar.n)
 
             if processo.returncode == 0:
                 return True, None
@@ -593,7 +605,9 @@ class OtimizadorVideo:
 
                 if not tem_problemas:
                     # Está otimizado E sem problemas - pode pular
-                    print(f"\n[{i}/{len(arquivos)}] ⏭️  {arquivo_origem.name}: já otimizado")
+                    print(
+                        f"\n[{i}/{len(arquivos)}] ⏭️  {arquivo_origem.name}: já otimizado"
+                    )
                     print(
                         f"   Info: {info_antes['width']}x{info_antes['height']} | "
                         f"{info_antes['codec']} | "
@@ -605,7 +619,9 @@ class OtimizadorVideo:
                     continue
                 else:
                     # Está otimizado MAS tem problemas - precisa corrigir
-                    print(f"\n[{i}/{len(arquivos)}] 🔧 {arquivo_origem.name}: otimizado, mas com problemas")
+                    print(
+                        f"\n[{i}/{len(arquivos)}] 🔧 {arquivo_origem.name}: otimizado, mas com problemas"
+                    )
                     print(
                         f"   Info: {info_antes['width']}x{info_antes['height']} | "
                         f"{info_antes['codec']} | "
