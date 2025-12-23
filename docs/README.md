@@ -21,27 +21,86 @@ Bem-vindo à documentação completa do projeto Media Tools!
    - Mapeamento de scripts e módulos
    - Estrutura de pastas de entrada/saída
 
-## 🎯 Funcionalidades por Categoria
+## 🎯 Documentação por Ferramenta
 
-### Processamento de Imagens
+### 📸 Processamento de Imagens
 
-- **Otimização**: Redução de tamanho mantendo qualidade
-- **Conversão**: WebP → JPG, suporte a AVIF/HEIC
-- **Validação**: Análise de legibilidade
-- **OCR**: Detecção de texto em imagens
-- **Duplicatas**: Detecção de imagens duplicadas
-- **Remoção de Fundo**: Remoção automática usando IA
-- **Correção de Cores**: Ajustes e filtros
-- **Thumbnails**: Geração de miniaturas
+1. **[Otimizador de Imagens](otimizador-imagens.md)**
+   - Otimiza JPG, PNG, WebP, AVIF, HEIC
+   - Preserva metadados EXIF
+   - Compressão inteligente
 
-### Processamento de Vídeos
+2. **[Conversor WebP → JPG](webp-to-jpg.md)**
+   - Converte WebP estático e animado
+   - Análise de qualidade automática
+   - Tratamento de transparência
 
-- **Otimização**: Compressão H.264
-- **Conversão**: WebM → MP4 com correções
-- **Extração**: Áudio e thumbnails
-- **Merge**: Concatenação de múltiplos vídeos
-- **Estabilização**: Correção de vídeos tremidos
-- **Duplicatas**: Detecção de vídeos duplicados
+3. **[Validador de Imagens](validate-images.md)**
+   - Analisa legibilidade (escuridão, foco, bordas)
+   - Separação automática (legíveis/ilegíveis)
+   - Relatório HTML opcional
+
+4. **[OCR de Imagens](ocr-imagens.md)**
+   - Detecção de texto usando Tesseract
+   - Suporte a português e inglês
+   - Separação automática (com/sem texto)
+
+5. **[Detector de Duplicatas de Imagens](detector-duplicatas-imagens.md)**
+   - Detecta imagens idênticas (hash MD5)
+   - Remoção automática opcional
+   - Relatório detalhado
+
+6. **[Removedor de Fundo](remover-fundo.md)**
+   - Remoção automática usando IA
+   - Gera PNG com transparência
+   - Processamento em lote
+
+7. **[Corretor de Cores](corretor-cores.md)**
+   - Ajuste de brilho, contraste, saturação
+   - Filtros artísticos (sépia, preto e branco, vintage)
+   - Correção automática de olhos vermelhos
+
+8. **[Gerador de Thumbnails](gerador-thumbnails.md)**
+   - Gera thumbnails de imagens e vídeos
+   - Múltiplos tamanhos configuráveis
+   - Otimização de qualidade
+
+### 🎬 Processamento de Vídeos
+
+9. **[Otimizador de Vídeos](otimizador-video.md)**
+   - Compressão H.264 com CRF
+   - Detecção de vídeos já otimizados
+   - Processamento paralelo
+
+10. **[Conversor WebM → MP4](webm-mp4.md)**
+    - Conversão com correções automáticas
+    - Detecção de problemas (VFR, timestamps)
+    - Perfis pré-configurados (web, mobile, archive)
+
+11. **[Extrator de Áudio](extrair-audio.md)**
+    - Extrai áudio em MP3, AAC, OGG, WAV
+    - Controle de qualidade (bitrate)
+    - Preservação de qualidade
+
+12. **[Extrator de Thumbnails](extrair-thumbnails.md)**
+    - Extrai múltiplas thumbnails por vídeo
+    - Distribuição inteligente ao longo do vídeo
+    - Tamanho configurável
+
+13. **[Merge de Vídeos](merge-videos.md)**
+    - Concatena múltiplos vídeos
+    - Modo copy (sem re-encodar)
+    - Ordenação automática
+
+14. **[Estabilizador de Vídeo](estabilizador-video.md)**
+    - Estabiliza vídeos tremidos
+    - Correção de rotação automática
+    - Análise de movimento avançada
+
+15. **[Detector de Duplicatas de Vídeos](detector-duplicatas-videos.md)**
+    - Detecta vídeos idênticos (hash MD5 de amostras)
+    - Otimizado para vídeos grandes
+    - Remoção automática opcional
 
 ## 📖 Como Usar Esta Documentação
 
@@ -59,4 +118,5 @@ Bem-vindo à documentação completa do projeto Media Tools!
 ---
 
 **Última atualização**: Veja [CHANGELOG.md](CHANGELOG.md) para informações sobre versões e atualizações.
+
 
