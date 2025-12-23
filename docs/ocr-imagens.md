@@ -101,7 +101,7 @@ python ocr-imagens.py
 - **Solução**: Instale Tesseract OCR no sistema (veja seção Instalação)
 
 **Problema**: Texto não detectado em imagens com texto
-- **Solução**: 
+- **Solução**:
   - Verifique qualidade da imagem (resolução, contraste)
   - Texto muito pequeno ou distorcido pode não ser detectado
   - Imagens muito escuras ou claras podem ter problemas

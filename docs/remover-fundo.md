@@ -86,7 +86,7 @@ python remover-fundo.py
 - **Solução**: Normal - o modelo de IA está sendo baixado (~170MB)
 
 **Problema**: Fundo não removido completamente
-- **Solução**: 
+- **Solução**:
   - A IA funciona melhor com objetos bem definidos
   - Fundos muito similares ao objeto podem ter problemas
   - Tente ajustar contraste da imagem original primeiro

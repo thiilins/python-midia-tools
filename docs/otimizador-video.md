@@ -35,19 +35,62 @@ python otimizador-video.py
 
 O script está configurado com os seguintes parâmetros padrão:
 
-- **CRF**: 23 (qualidade boa, compressão média)
-- **Preset**: medium (velocidade vs compressão)
+- **Preset**: medium (qualidade boa, compressão média, velocidade balanceada)
 - **Deletar originais**: Sim (após otimização bem-sucedida)
 
-### Personalização
+### Usando Presets Pré-configurados
 
-Para personalizar os parâmetros, edite o arquivo `otimizador-video.py`:
+O otimizador oferece 5 presets pré-configurados para diferentes necessidades:
+
+#### Listar Presets Disponíveis
+
+```bash
+python otimizador-video.py --presets
+# ou
+python otimizador-video.py -p
+```
+
+#### Usar um Preset Específico
+
+```bash
+# Via argumento
+python otimizador-video.py --preset ultra_fast
+python otimizador-video.py --preset fast
+python otimizador-video.py --preset medium      # Padrão
+python otimizador-video.py --preset high_quality
+python otimizador-video.py --preset maximum
+
+# Via variável de ambiente
+export PRESET_VIDEO=high_quality
+python otimizador-video.py
+```
+
+### Presets Disponíveis
+
+| Preset | CRF | Preset FFmpeg | Descrição |
+|--------|-----|---------------|-----------|
+| **ultra_fast** | 28 | ultrafast | Muito rápido, menor qualidade (compressão máxima) |
+| **fast** | 26 | fast | Rápido, qualidade média-baixa |
+| **medium** | 23 | medium | Balanceado, qualidade boa (padrão) |
+| **high_quality** | 20 | slow | Alta qualidade, mais lento |
+| **maximum** | 18 | veryslow | Máxima qualidade, muito lento |
+
+### Personalização Avançada
+
+Para personalização manual (sem usar presets), edite o arquivo `otimizador-video.py`:
 
 ```python
+# Usando parâmetros individuais
 otimizador = OtimizadorVideo(
     crf="23",           # 18-28 (menor = melhor qualidade, maior arquivo)
     preset="medium"     # ultrafast, fast, medium, slow, veryslow
 )
+
+# Ou usando preset pré-configurado
+otimizador = OtimizadorVideo(
+    preset_nome="high_quality"  # ultra_fast, fast, medium, high_quality, maximum
+)
+
 otimizador.processar(deletar_originais=True)  # True/False
 ```
 
@@ -90,23 +133,33 @@ otimizador.processar(deletar_originais=True)  # True/False
 
 ## Exemplos
 
-### Otimizar vídeos (padrão)
+### Otimizar vídeos (padrão - preset medium)
 
 ```bash
 python otimizador-video.py
 ```
 
+### Usar preset específico
+
+```bash
+# Compressão máxima (muito rápido)
+python otimizador-video.py --preset ultra_fast
+
+# Alta qualidade (mais lento)
+python otimizador-video.py --preset high_quality
+
+# Máxima qualidade (muito lento)
+python otimizador-video.py --preset maximum
+```
+
 ### Personalizar qualidade (editar código)
 
 ```python
-# Alta qualidade
+# Usando preset
+otimizador = OtimizadorVideo(preset_nome="high_quality")
+
+# Ou parâmetros individuais
 otimizador = OtimizadorVideo(crf="18", preset="slow")
-
-# Compressão máxima
-otimizador = OtimizadorVideo(crf="28", preset="veryslow")
-
-# Rápido, qualidade média
-otimizador = OtimizadorVideo(crf="23", preset="fast")
 ```
 
 ## Notas

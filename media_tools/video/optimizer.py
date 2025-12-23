@@ -28,12 +28,42 @@ class OtimizadorVideo:
     CRF_VALUE = "23"
     PRESET_VALUE = "medium"
 
+    # Presets pré-configurados
+    PRESETS = {
+        "ultra_fast": {
+            "crf": "28",
+            "preset": "ultrafast",
+            "descricao": "Muito rápido, menor qualidade (compressão máxima)",
+        },
+        "fast": {
+            "crf": "26",
+            "preset": "fast",
+            "descricao": "Rápido, qualidade média-baixa",
+        },
+        "medium": {
+            "crf": "23",
+            "preset": "medium",
+            "descricao": "Balanceado, qualidade boa (padrão)",
+        },
+        "high_quality": {
+            "crf": "20",
+            "preset": "slow",
+            "descricao": "Alta qualidade, mais lento",
+        },
+        "maximum": {
+            "crf": "18",
+            "preset": "veryslow",
+            "descricao": "Máxima qualidade, muito lento",
+        },
+    }
+
     def __init__(
         self,
         pasta_entrada: Path = None,
         pasta_saida: Path = None,
         crf: str = None,
         preset: str = None,
+        preset_nome: str = None,
     ):
         """
         Inicializa o otimizador.
@@ -41,8 +71,10 @@ class OtimizadorVideo:
         Args:
             pasta_entrada: Pasta de entrada (None = padrão).
             pasta_saida: Pasta de saída (None = padrão).
-            crf: Valor CRF para qualidade (None = padrão).
-            preset: Preset de velocidade (None = padrão).
+            crf: Valor CRF para qualidade (None = padrão ou preset).
+            preset: Preset de velocidade FFmpeg (None = padrão ou preset).
+            preset_nome: Nome do preset pré-configurado (None = usa crf/preset individuais).
+                        Opções: "ultra_fast", "fast", "medium", "high_quality", "maximum"
         """
         if pasta_entrada is None or pasta_saida is None:
             entrada, saida = obter_pastas_entrada_saida("videos")
@@ -52,8 +84,34 @@ class OtimizadorVideo:
             self.pasta_entrada = pasta_entrada
             self.pasta_saida = pasta_saida
 
-        self.crf = crf or self.CRF_VALUE
-        self.preset = preset or self.PRESET_VALUE
+        # Se preset_nome foi fornecido, usa as configurações do preset
+        if preset_nome:
+            if preset_nome in self.PRESETS:
+                preset_config = self.PRESETS[preset_nome]
+                self.crf = preset_config["crf"]
+                self.preset = preset_config["preset"]
+                self.preset_nome = preset_nome
+            else:
+                print(f"⚠️  Preset '{preset_nome}' não encontrado. Usando 'medium'.")
+                preset_config = self.PRESETS["medium"]
+                self.crf = preset_config["crf"]
+                self.preset = preset_config["preset"]
+                self.preset_nome = "medium"
+        else:
+            # Usa valores individuais ou padrão
+            self.crf = crf or self.CRF_VALUE
+            self.preset = preset or self.PRESET_VALUE
+            self.preset_nome = None
+
+    @classmethod
+    def listar_presets(cls) -> dict:
+        """
+        Lista todos os presets disponíveis.
+
+        Returns:
+            dict: Dicionário com presets e suas descrições.
+        """
+        return cls.PRESETS
 
     def _obter_info_video(self, arquivo: Path) -> Dict:
         """
@@ -329,7 +387,12 @@ class OtimizadorVideo:
             return {"sucessos": 0, "falhas": 0, "pulados": 0}
 
         print(f"\n🚀 Iniciando otimização de {len(arquivos)} vídeo(s)...")
-        print(f"⚙️  Configuração: CRF {self.crf} | Preset {self.preset}")
+        if self.preset_nome:
+            preset_info = self.PRESETS[self.preset_nome]
+            print(f"⚙️  Preset: {self.preset_nome} - {preset_info['descricao']}")
+            print(f"   Configuração: CRF {self.crf} | Preset {self.preset}")
+        else:
+            print(f"⚙️  Configuração: CRF {self.crf} | Preset {self.preset}")
         print("-" * 60)
 
         sucessos = 0
