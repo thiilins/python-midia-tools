@@ -8,8 +8,9 @@ Ferramenta para otimizar vídeos MP4, M4V e MOV reduzindo tamanho mantendo quali
 
 - ✅ **Otimização inteligente**: Reduz tamanho mantendo qualidade
 - ✅ **Codec H.264**: Compatibilidade universal
-- ✅ **Detecção de otimização**: Pula vídeos já otimizados
+- ✅ **Detecção de otimização**: Pula vídeos já otimizados (ou corrige se tiverem problemas)
 - ✅ **Correção automática de problemas**: Detecta e corrige VFR, timestamps, dessincronia de áudio
+- ✅ **Correção inteligente**: Corrige problemas mesmo em vídeos já otimizados
 - ✅ **Presets pré-configurados**: 5 presets para diferentes necessidades
 - ✅ **Informações detalhadas**: Mostra codec, bitrate, resolução antes/depois
 - ✅ **Barra de progresso**: Acompanhamento em tempo real
@@ -68,13 +69,13 @@ python otimizador-video.py
 
 ### Presets Disponíveis
 
-| Preset | CRF | Preset FFmpeg | Descrição |
-|--------|-----|---------------|-----------|
-| **ultra_fast** | 28 | ultrafast | Muito rápido, menor qualidade (compressão máxima) |
-| **fast** | 26 | fast | Rápido, qualidade média-baixa |
-| **medium** | 23 | medium | Balanceado, qualidade boa (padrão) |
-| **high_quality** | 20 | slow | Alta qualidade, mais lento |
-| **maximum** | 18 | veryslow | Máxima qualidade, muito lento |
+| Preset           | CRF | Preset FFmpeg | Descrição                                         |
+| ---------------- | --- | ------------- | ------------------------------------------------- |
+| **ultra_fast**   | 28  | ultrafast     | Muito rápido, menor qualidade (compressão máxima) |
+| **fast**         | 26  | fast          | Rápido, qualidade média-baixa                     |
+| **medium**       | 23  | medium        | Balanceado, qualidade boa (padrão)                |
+| **high_quality** | 20  | slow          | Alta qualidade, mais lento                        |
+| **maximum**      | 18  | veryslow      | Máxima qualidade, muito lento                     |
 
 ### Personalização Avançada
 
@@ -127,12 +128,28 @@ otimizador.processar(deletar_originais=True)  # True/False
 ## Como Funciona
 
 1. Analisa cada vídeo (codec, bitrate, resolução)
-2. Detecta problemas (VFR, timestamps, dessincronia de áudio) se habilitado
-3. Verifica se já está otimizado
-4. Se não, otimiza usando H.264 com CRF
-5. Aplica correções automáticas se problemas foram detectados
-6. Mostra informações antes/depois
-7. Deleta original se solicitado
+2. Verifica se já está otimizado (codec H.264 + bitrate < 5 Mbps)
+3. Se já otimizado:
+   - **Sem problemas**: Pula o vídeo
+   - **Com problemas**: Aplica correções (sem re-otimizar quando possível)
+4. Se não otimizado:
+   - Detecta problemas (VFR, timestamps, dessincronia de áudio) se habilitado
+   - Otimiza usando H.264 com CRF
+   - Aplica correções automáticas se problemas foram detectados
+5. Mostra informações antes/depois
+6. Deleta original se solicitado
+
+### Detecção de Otimização
+
+Um vídeo é considerado "já otimizado" quando:
+- Codec é **H.264** (`h264`)
+- Bitrate total < **5 Mbps** (indica compressão)
+
+### Correção de Vídeos Otimizados
+
+Vídeos já otimizados que têm problemas são corrigidos automaticamente:
+- **VFR**: Re-encoda com filtro `fps` (necessário)
+- **Timestamps/Áudio**: Usa `copy` mode (sem re-encodar, mais rápido)
 
 ## Correção Automática de Problemas
 
@@ -142,9 +159,17 @@ O otimizador detecta e corrige automaticamente os seguintes problemas:
 - **Timestamps**: Corrige problemas com timestamps usando `genpts` e `igndts`
 - **Dessincronia de áudio**: Ajusta sincronia com `aresample=async=1`
 
-A correção é **habilitada por padrão**. Para desabilitar, edite o código:
+A correção é **habilitada por padrão**. Para desabilitar:
 
-```python
+```bash
+# Via linha de comando
+python otimizador-video.py --sem-correcoes
+
+# Via variável de ambiente
+export CORRIGIR_PROBLEMAS=false
+python otimizador-video.py
+
+# Ou editando o código
 otimizador = OtimizadorVideo(corrigir_problemas=False)
 ```
 
@@ -169,6 +194,16 @@ python otimizador-video.py --preset high_quality
 python otimizador-video.py --preset maximum
 ```
 
+### Desabilitar correções automáticas
+
+```bash
+# Apenas otimizar, sem corrigir problemas
+python otimizador-video.py --sem-correcoes
+
+# Combinar com preset
+python otimizador-video.py --preset fast --sem-correcoes
+```
+
 ### Personalizar qualidade (editar código)
 
 ```python
@@ -182,8 +217,9 @@ otimizador = OtimizadorVideo(crf="18", preset="slow")
 ## Notas
 
 - ⚠️ **Atenção**: Com `deletar_originais=True`, os arquivos originais são **permanentemente deletados** após otimização
-- Vídeos já otimizados são automaticamente pulados
-- Processamento paralelo limitado a 2 vídeos simultaneamente
+- Vídeos já otimizados **sem problemas** são automaticamente pulados
+- Vídeos já otimizados **com problemas** são corrigidos (sem re-otimizar quando possível)
+- Correções automáticas são habilitadas por padrão
 - O script mostra informações detalhadas de cada vídeo
 
 ## Troubleshooting
@@ -194,7 +230,7 @@ otimizador = OtimizadorVideo(crf="18", preset="slow")
 
 **Problema**: Vídeo não otimizado (já otimizado)
 
-- **Solução**: Normal - vídeos já otimizados são pulados automaticamente
+- **Solução**: Normal - vídeos já otimizados sem problemas são pulados. Se tiver problemas, será corrigido automaticamente
 
 **Problema**: Processamento muito lento
 

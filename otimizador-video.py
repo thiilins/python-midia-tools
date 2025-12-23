@@ -28,10 +28,16 @@ def main():
             print(f"  CRF: {config['crf']} | Preset: {config['preset']}")
         print("\n" + "=" * 60)
         print("\nUso:")
-        print("  python otimizador-video.py                    # Usa preset 'medium' (padrão)")
-        print("  python otimizador-video.py --preset ultra_fast # Usa preset ultra_fast")
+        print(
+            "  python otimizador-video.py                    # Usa preset 'medium' (padrão)"
+        )
+        print(
+            "  python otimizador-video.py --preset ultra_fast # Usa preset ultra_fast"
+        )
         print("  python otimizador-video.py --preset maximum   # Usa preset maximum")
-        print("  python otimizador-video.py --sem-correcoes    # Desabilita correções automáticas")
+        print(
+            "  python otimizador-video.py --sem-correcoes    # Desabilita correções automáticas"
+        )
         print("\nOu via variável de ambiente:")
         print("  export PRESET_VIDEO=high_quality")
         print("  export CORRIGIR_PROBLEMAS=false  # Desabilita correções")
@@ -62,14 +68,12 @@ def main():
         # Se preset_nome foi fornecido, usa preset; senão usa padrão (medium)
         if preset_nome:
             otimizador = OtimizadorVideo(
-                preset_nome=preset_nome,
-                corrigir_problemas=corrigir_problemas
+                preset_nome=preset_nome, corrigir_problemas=corrigir_problemas
             )
         else:
             # Padrão: medium
             otimizador = OtimizadorVideo(
-                preset_nome="medium",
-                corrigir_problemas=corrigir_problemas
+                preset_nome="high_quality", corrigir_problemas=corrigir_problemas
             )
 
         otimizador.processar(deletar_originais=True)

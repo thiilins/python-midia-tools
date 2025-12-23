@@ -528,11 +528,11 @@ class OtimizadorVideo:
                             # Garante que não ultrapasse o total
                             if pbar.n + incremento > int(duracao_total):
                                 incremento = int(duracao_total) - pbar.n
-                            
+
                             if incremento > 0:
                                 pbar.update(incremento)
                             tempo_anterior = tempo_atual_seg
-                
+
                 # Garante que a barra chegue a 100% ao finalizar
                 if pbar.n < int(duracao_total):
                     pbar.update(int(duracao_total) - pbar.n)
