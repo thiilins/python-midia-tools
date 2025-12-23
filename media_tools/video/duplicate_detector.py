@@ -151,3 +151,4 @@ class DetectorDuplicatasVideos:
 
         return {"duplicatas": duplicatas_encontradas, "removidos": removidos}
 
+

@@ -144,3 +144,4 @@ class RemovedorFundo:
 
         return {"sucessos": sucessos, "falhas": falhas}
 
+

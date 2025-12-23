@@ -207,3 +207,4 @@ class CorretorCores:
 
         return {"sucessos": sucessos, "falhas": falhas}
 
+

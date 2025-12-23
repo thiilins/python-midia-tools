@@ -226,3 +226,4 @@ class EstabilizadorVideo:
 
         return {"sucessos": sucessos, "falhas": falhas}
 
+

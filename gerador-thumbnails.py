@@ -82,7 +82,9 @@ def gerar_thumbnail_video(arquivo: Path, pasta_saida: Path, tamanhos: list) -> i
             "default=noprint_wrappers=1:nokey=1",
             str(arquivo),
         ]
-        resultado = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        resultado = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10
+        )
         if resultado.returncode == 0:
             duracao = float(resultado.stdout.strip())
     except Exception:
@@ -150,7 +152,9 @@ def main():
 
         if imagens:
             print(f"\n📸 Processando {len(imagens)} imagem(ns)...")
-            with ProgressBar(total=len(imagens), desc="Imagens", unit="img").context() as pbar:
+            with ProgressBar(
+                total=len(imagens), desc="Imagens", unit="img"
+            ).context() as pbar:
                 for img in imagens:
                     gerados = gerar_thumbnail_imagem(img, pasta_saida, tamanhos)
                     total_gerados += gerados
@@ -161,12 +165,15 @@ def main():
         videos = [
             f
             for f in pasta_videos.iterdir()
-            if f.is_file() and f.suffix.lower() in {".mp4", ".m4v", ".mov", ".webm", ".avi"}
+            if f.is_file()
+            and f.suffix.lower() in {".mp4", ".m4v", ".mov", ".webm", ".avi"}
         ]
 
         if videos:
             print(f"\n🎬 Processando {len(videos)} vídeo(s)...")
-            with ProgressBar(total=len(videos), desc="Vídeos", unit="vídeo").context() as pbar:
+            with ProgressBar(
+                total=len(videos), desc="Vídeos", unit="vídeo"
+            ).context() as pbar:
                 for video in videos:
                     gerados = gerar_thumbnail_video(video, pasta_saida, tamanhos)
                     total_gerados += gerados
@@ -193,4 +200,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Erro inesperado: {e}")
         sys.exit(1)
-
