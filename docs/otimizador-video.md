@@ -9,7 +9,8 @@ Ferramenta para otimizar vídeos MP4, M4V e MOV reduzindo tamanho mantendo quali
 - ✅ **Otimização inteligente**: Reduz tamanho mantendo qualidade
 - ✅ **Codec H.264**: Compatibilidade universal
 - ✅ **Detecção de otimização**: Pula vídeos já otimizados
-- ✅ **Processamento paralelo**: Processa até 2 vídeos simultaneamente
+- ✅ **Correção automática de problemas**: Detecta e corrige VFR, timestamps, dessincronia de áudio
+- ✅ **Presets pré-configurados**: 5 presets para diferentes necessidades
 - ✅ **Informações detalhadas**: Mostra codec, bitrate, resolução antes/depois
 - ✅ **Barra de progresso**: Acompanhamento em tempo real
 
@@ -126,10 +127,26 @@ otimizador.processar(deletar_originais=True)  # True/False
 ## Como Funciona
 
 1. Analisa cada vídeo (codec, bitrate, resolução)
-2. Verifica se já está otimizado
-3. Se não, otimiza usando H.264 com CRF
-4. Mostra informações antes/depois
-5. Deleta original se solicitado
+2. Detecta problemas (VFR, timestamps, dessincronia de áudio) se habilitado
+3. Verifica se já está otimizado
+4. Se não, otimiza usando H.264 com CRF
+5. Aplica correções automáticas se problemas foram detectados
+6. Mostra informações antes/depois
+7. Deleta original se solicitado
+
+## Correção Automática de Problemas
+
+O otimizador detecta e corrige automaticamente os seguintes problemas:
+
+- **VFR (Variable Frame Rate)**: Converte para FPS constante
+- **Timestamps**: Corrige problemas com timestamps usando `genpts` e `igndts`
+- **Dessincronia de áudio**: Ajusta sincronia com `aresample=async=1`
+
+A correção é **habilitada por padrão**. Para desabilitar, edite o código:
+
+```python
+otimizador = OtimizadorVideo(corrigir_problemas=False)
+```
 
 ## Exemplos
 

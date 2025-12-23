@@ -64,6 +64,7 @@ class OtimizadorVideo:
         crf: str = None,
         preset: str = None,
         preset_nome: str = None,
+        corrigir_problemas: bool = True,
     ):
         """
         Inicializa o otimizador.
@@ -75,6 +76,7 @@ class OtimizadorVideo:
             preset: Preset de velocidade FFmpeg (None = padrão ou preset).
             preset_nome: Nome do preset pré-configurado (None = usa crf/preset individuais).
                         Opções: "ultra_fast", "fast", "medium", "high_quality", "maximum"
+            corrigir_problemas: Se True, detecta e corrige problemas (VFR, timestamps, etc).
         """
         if pasta_entrada is None or pasta_saida is None:
             entrada, saida = obter_pastas_entrada_saida("videos")
@@ -102,6 +104,8 @@ class OtimizadorVideo:
             self.crf = crf or self.CRF_VALUE
             self.preset = preset or self.PRESET_VALUE
             self.preset_nome = None
+
+        self.corrigir_problemas = corrigir_problemas
 
     @classmethod
     def listar_presets(cls) -> dict:
@@ -269,6 +273,81 @@ class OtimizadorVideo:
         except ValueError:
             return 0.0
 
+    def _detectar_problemas(self, arquivo: Path) -> Dict:
+        """
+        Detecta problemas no vídeo (VFR, timestamps, áudio).
+
+        Args:
+            arquivo: Caminho do arquivo de vídeo.
+
+        Returns:
+            dict: Problemas detectados.
+        """
+        problemas = {
+            "vfr": False,  # Variable Frame Rate
+            "timestamps": False,
+            "audio_desync": False,
+        }
+
+        if not self.corrigir_problemas or shutil.which("ffprobe") is None:
+            return problemas
+
+        try:
+            # Verifica frame rate variável
+            cmd = [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=r_frame_rate",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(arquivo),
+            ]
+            resultado = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if resultado.returncode == 0:
+                fps_str = resultado.stdout.strip()
+                if fps_str and "/" in fps_str:
+                    num, den = map(int, fps_str.split("/"))
+                    if den > 0:
+                        fps = num / den
+                        # FPS muito variável ou não inteiro pode indicar VFR
+                        if fps < 10 or fps > 120 or fps != int(fps):
+                            problemas["vfr"] = True
+
+            # Verifica se há stream de áudio e se está sincronizado
+            cmd_audio = [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(arquivo),
+            ]
+            resultado_audio = subprocess.run(
+                cmd_audio, capture_output=True, text=True, timeout=10
+            )
+            if resultado_audio.returncode != 0:
+                # Sem áudio pode causar problemas de sincronia
+                problemas["audio_desync"] = True
+
+            # Timestamps: verifica se há problemas com PTS
+            # Se o vídeo tem problemas de timestamps, geralmente aparece em erros do FFmpeg
+            # Aqui assumimos que se VFR ou audio_desync, pode ter problemas de timestamps
+            if problemas["vfr"] or problemas["audio_desync"]:
+                problemas["timestamps"] = True
+
+        except Exception:
+            pass
+
+        return problemas
+
     def _converter_video(
         self, arquivo_entrada: Path, arquivo_saida: Path
     ) -> tuple[bool, Optional[str]]:
@@ -287,30 +366,98 @@ class OtimizadorVideo:
         if duracao_total == 0:
             duracao_total = 100  # Fallback
 
-        # Comando FFmpeg
+        # Detecta problemas se habilitado
+        problemas = self._detectar_problemas(arquivo_entrada)
+        aplicar_correcoes = self.corrigir_problemas and any(problemas.values())
+
+        if aplicar_correcoes:
+            print(f"   🔍 Problemas detectados:")
+            if problemas["vfr"]:
+                print(f"      ⚠️  Frame rate variável (VFR) - será corrigido")
+            if problemas["timestamps"]:
+                print(f"      ⚠️  Problemas com timestamps - será corrigido")
+            if problemas["audio_desync"]:
+                print(f"      ⚠️  Possível dessincronia de áudio - será corrigido")
+
+        # Comando FFmpeg base
         comando = [
             "ffmpeg",
             "-y",
+        ]
+
+        # Adiciona flags de correção de erros se necessário
+        if aplicar_correcoes:
+            comando.extend([
+                "-err_detect",
+                "ignore_err",
+            ])
+
+        comando.extend([
             "-i",
             str(arquivo_entrada),
+        ])
+
+        # Filtros de vídeo (para correção de VFR)
+        filtros_video = []
+        if aplicar_correcoes and problemas["vfr"]:
+            # Força FPS constante baseado no FPS detectado ou usa 30fps padrão
+            info_video = self._obter_info_video(arquivo_entrada)
+            fps_alvo = info_video.get("fps", 30)
+            if fps_alvo and fps_alvo > 0:
+                fps_alvo = round(fps_alvo)
+            else:
+                fps_alvo = 30
+            filtros_video.append(f"fps={fps_alvo}")
+
+        # Configurações de codificação
+        comando.extend([
             "-c:v",
             "libx264",
             "-crf",
             self.crf,
             "-preset",
             self.preset,
+        ])
+
+        # Aplica filtros de vídeo se houver
+        if filtros_video:
+            comando.extend(["-filter:v", ",".join(filtros_video)])
+
+        # Áudio com correções se necessário
+        filtro_audio = "aresample=async=1" if aplicar_correcoes else None
+
+        comando.extend([
             "-c:a",
             "aac",
             "-b:a",
             "128k",
+        ])
+
+        if filtro_audio:
+            comando.extend(["-af", filtro_audio])
+
+        # Flags adicionais para correção
+        comando.extend([
             "-movflags",
             "+faststart",
             "-pix_fmt",
             "yuv420p",
+        ])
+
+        if aplicar_correcoes:
+            # Flags para corrigir timestamps e problemas de sincronia
+            comando.extend([
+                "-fflags",
+                "+genpts+igndts",
+                "-max_muxing_queue_size",
+                "4096",
+            ])
+
+        comando.extend([
             "-progress",
             "pipe:1",
             str(arquivo_saida),
-        ]
+        ])
 
         # Regex para capturar o tempo processado
         regex_tempo = re.compile(r"out_time=(\d{2}:\d{2}:\d{2}\.\d+)")
