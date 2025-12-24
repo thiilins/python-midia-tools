@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
 chcp 65001 >nul 2>&1
-TITLE Media Tools - Canivete Suíço de Mídia
+TITLE Media Tools - Canivete Suico de Midia
 
-:: Muda para o diretório raiz do projeto
-cd /d "%~dp0\.."
+REM Muda para o diretorio raiz do projeto
+pushd "%~dp0\.."
 
 echo ========================================================
 echo      MEDIA TOOLS - VERIFICACAO DE AMBIENTE
@@ -14,7 +14,7 @@ echo.
 set "NEED_RESTART=0"
 set "PYTHON_CMD="
 
-:: --- 1. VERIFICAR PYTHON ---
+REM --- 1. VERIFICAR PYTHON ---
 python --version >nul 2>&1
 if errorlevel 1 (
     py --version >nul 2>&1
@@ -24,6 +24,7 @@ if errorlevel 1 (
         if errorlevel 1 (
             echo [ERRO] Instale Python manualmente: https://www.python.org/downloads/
             pause
+            popd
             exit /b 1
         )
         echo Instalando Python via Winget...
@@ -31,10 +32,12 @@ if errorlevel 1 (
         if errorlevel 1 (
             echo [ERRO] Falha ao instalar Python. Instale manualmente.
             pause
+            popd
             exit /b 1
         )
         echo [OK] Python instalado. Reinicie o script.
         pause
+        popd
         exit /b 0
     ) else (
         set "PYTHON_CMD=py"
@@ -43,43 +46,45 @@ if errorlevel 1 (
     set "PYTHON_CMD=python"
 )
 
-:: --- 2. VERIFICAR PIP ---
-%PYTHON_CMD% -m pip --version >nul 2>&1
+REM --- 2. VERIFICAR PIP ---
+call %PYTHON_CMD% -m pip --version >nul 2>&1
 if errorlevel 1 (
     echo [X] pip nao encontrado. Instalando...
-    %PYTHON_CMD% -m ensurepip --upgrade
+    call %PYTHON_CMD% -m ensurepip --upgrade
     if errorlevel 1 (
         echo [ERRO] Falha ao instalar pip.
         pause
+        popd
         exit /b 1
     )
 )
 
-:: --- 3. VERIFICAR DEPENDENCIAS ---
+REM --- 3. VERIFICAR DEPENDENCIAS ---
 echo Verificando dependencias...
-%PYTHON_CMD% -c "import tqdm, PIL, cv2, numpy" >nul 2>&1
+call %PYTHON_CMD% -c "import tqdm, PIL, cv2, numpy" >nul 2>&1
 if errorlevel 1 (
     echo [X] Instalando dependencias...
-    %PYTHON_CMD% -m pip install -r requirements.txt --quiet
+    call %PYTHON_CMD% -m pip install -r requirements.txt --quiet
     if errorlevel 1 (
         echo [ERRO] Falha ao instalar dependencias.
         pause
+        popd
         exit /b 1
     )
 )
 
-:: --- 4. VERIFICAR FFMPEG ---
+REM --- 4. VERIFICAR FFMPEG ---
 ffmpeg -version >nul 2>&1
 if errorlevel 1 (
-    echo [AVISO] FFmpeg nao encontrado ^(necessario apenas para videos^).
-        winget --version >nul 2>&1
+    echo [AVISO] FFmpeg nao encontrado (necessario apenas para videos).
+    winget --version >nul 2>&1
     if not errorlevel 1 (
         echo Tentando instalar FFmpeg...
-            winget install -e --id Gyan.FFmpeg --accept-package-agreements --accept-source-agreements
+        winget install -e --id Gyan.FFmpeg --accept-package-agreements --accept-source-agreements
     )
 )
 
-:: --- 5. MENU ---
+REM --- 5. MENU ---
 cls
 echo ========================================================
 echo      MEDIA TOOLS - CANIVETE SUICO DE MIDIA
@@ -124,22 +129,27 @@ set "SCRIPTS[13]=merge-videos.py"
 set "SCRIPTS[14]=estabilizador-video.py"
 set "SCRIPTS[15]=detector-duplicatas-videos.py"
 
-if "%OPCAO%"=="0" exit /b 0
+if "%OPCAO%"=="0" (
+    popd
+    exit /b 0
+)
 
 set "SCRIPT=!SCRIPTS[%OPCAO%]!"
 if not defined SCRIPT (
     echo [ERRO] Opcao invalida.
     pause
+    popd
     exit /b 1
 )
 
 echo.
 echo [V] Iniciando !SCRIPT!...
 echo --------------------------------------------------------
-%PYTHON_CMD% !SCRIPT!
+call %PYTHON_CMD% !SCRIPT!
 if errorlevel 1 (
     echo.
     echo [ERRO] Script retornou codigo de erro.
 )
 echo.
+popd
 pause

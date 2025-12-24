@@ -3,15 +3,16 @@ setlocal enabledelayedexpansion
 chcp 65001 >nul 2>&1
 TITLE Media Tools - Setup Ambiente Virtual
 
-:: Muda para o diretório raiz do projeto
-cd /d "%~dp0\.."
+REM Muda para o diretorio raiz do projeto
+pushd "%~dp0\.."
 
 echo ========================================================
 echo      CONFIGURANDO AMBIENTE VIRTUAL (WINDOWS)
 echo ========================================================
 echo.
 
-:: Verifica Python
+REM Verifica Python
+set "PYTHON_CMD="
 python --version >nul 2>&1
 if errorlevel 1 (
     py --version >nul 2>&1
@@ -19,6 +20,7 @@ if errorlevel 1 (
         echo [ERRO] Python nao encontrado!
         echo Instale: https://www.python.org/downloads/
         pause
+        popd
         exit /b 1
     ) else (
         set "PYTHON_CMD=py"
@@ -28,9 +30,9 @@ if errorlevel 1 (
 )
 
 echo [OK] Python:
-%PYTHON_CMD% --version
+call %PYTHON_CMD% --version
 
-:: Verifica se venv já existe
+REM Verifica se venv ja existe
 if exist "venv" (
     echo.
     set /p RESPOSTA="Ambiente virtual existe. Recriar? (S/N): "
@@ -42,18 +44,19 @@ if exist "venv" (
     )
 )
 
-:: Cria venv
+REM Cria venv
 echo.
 echo Criando ambiente virtual...
-%PYTHON_CMD% -m venv venv
+call %PYTHON_CMD% -m venv venv
 if errorlevel 1 (
     echo [ERRO] Falha ao criar ambiente virtual.
     pause
+    popd
     exit /b 1
 )
 
 :instalar
-:: Ativa e instala
+REM Ativa e instala
 echo.
 echo Instalando dependencias...
 call venv\Scripts\activate.bat
@@ -62,6 +65,7 @@ pip install -r requirements.txt
 if errorlevel 1 (
     echo [ERRO] Falha ao instalar dependencias.
     pause
+    popd
     exit /b 1
 )
 
@@ -74,4 +78,5 @@ echo Para usar:
 echo   venv\Scripts\activate.bat
 echo   python otimizador-imagens.py
 echo.
+popd
 pause
