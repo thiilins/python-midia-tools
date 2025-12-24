@@ -50,9 +50,10 @@ opencv-python>=4.12.0
 
 # NumPy: Biblioteca para computação numérica
 #   - Usado em: validate-images.py, estabilizador-video.py (análise de imagens)
-#   - Nota: Versão ajustada para compatibilidade com Python 3.14 (usa wheels pré-compiladas)
-#   - Python 3.14 é muito novo, então usamos 1.26.x que tem wheels garantidas
-numpy>=1.26.0,<2.0.0
+#   - Nota: Python 3.14 é muito novo, pode não ter wheels pré-compiladas
+#   - Se falhar, instale manualmente: pip install numpy (sem versão específica)
+#   - Ou use Python 3.11/3.12 que têm melhor suporte de wheels
+numpy
 
 # ============================================
 # OCR E PROCESSAMENTO AVANÇADO

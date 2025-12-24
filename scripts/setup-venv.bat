@@ -61,9 +61,29 @@ echo.
 echo Instalando dependencias...
 call venv\Scripts\activate.bat
 python -m pip install --upgrade pip --quiet
+
+REM Tenta instalar NumPy primeiro (Python 3.14 pode precisar de versao especifica)
+echo.
+echo [INFO] Tentando instalar NumPy (pode demorar se precisar compilar)...
+python -m pip install numpy --only-binary :all: --quiet 2>nul
+if errorlevel 1 (
+    echo [AVISO] NumPy nao encontrou wheel pre-compilada para Python 3.14.
+    echo [AVISO] Tentando instalar versao mais recente disponivel...
+    python -m pip install numpy --upgrade --quiet
+)
+
+REM Instala demais dependencias
+echo [INFO] Instalando demais dependencias...
 pip install -r requirements.txt
 if errorlevel 1 (
+    echo.
     echo [ERRO] Falha ao instalar dependencias.
+    echo.
+    echo [INFO] Python 3.14 e muito novo e pode nao ter wheels para todas as dependencias.
+    echo [INFO] Solucoes:
+    echo   1. Instale Visual Studio Build Tools: https://visualstudio.microsoft.com/downloads/
+    echo   2. Use Python 3.11 ou 3.12 (melhor suporte de wheels)
+    echo   3. Instale NumPy manualmente: pip install numpy
     pause
     popd
     exit /b 1
