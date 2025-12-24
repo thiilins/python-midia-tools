@@ -90,7 +90,7 @@ def main():
         else:
             # Padrão: medium
             otimizador = OtimizadorVideo(
-                preset_nome="medium", corrigir_problemas=corrigir_problemas
+                preset_nome="high_quality", corrigir_problemas=corrigir_problemas
             )
 
         otimizador.processar(deletar_originais=False)

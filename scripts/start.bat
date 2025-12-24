@@ -72,10 +72,10 @@ if errorlevel 1 (
 ffmpeg -version >nul 2>&1
 if errorlevel 1 (
     echo [AVISO] FFmpeg nao encontrado ^(necessario apenas para videos^).
-    winget --version >nul 2>&1
+        winget --version >nul 2>&1
     if not errorlevel 1 (
         echo Tentando instalar FFmpeg...
-        winget install -e --id Gyan.FFmpeg --accept-package-agreements --accept-source-agreements
+            winget install -e --id Gyan.FFmpeg --accept-package-agreements --accept-source-agreements
     )
 )
 

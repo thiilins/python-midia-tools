@@ -95,12 +95,13 @@ python detector-duplicatas-imagens.py --remover
 ## Troubleshooting
 
 **Problema**: Nenhuma duplicata encontrada
+
 - **Solução**: Verifique se há pelo menos 2 imagens na pasta
 
 **Problema**: Arquivos visualmente iguais não são detectados
+
 - **Solução**: O detector usa hash MD5 (arquivo idêntico). Imagens similares mas com metadados diferentes não são detectadas. Use ferramenta de comparação visual para isso.
 
 **Problema**: Erro ao remover arquivo
+
 - **Solução**: Verifique permissões de escrita na pasta
-
-
