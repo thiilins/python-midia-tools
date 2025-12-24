@@ -115,10 +115,24 @@
 - Múltiplos tamanhos (320x240, 640x480, 1280x720)
 - Processa imagens e vídeos automaticamente
 
+#### 16. Corretor de Vídeos ✅
+
+- **Script**: `corretor-video.py`
+- **Módulo**: `media_tools/video/corrector.py` (CorretorVideo)
+- Corrige problemas de framerate (VFR) - converte para framerate constante
+- Corrige problemas com timestamps usando `genpts` e `igndts`
+- Corrige dessincronia de áudio com `aresample=async=1`
+- Detecção inteligente de problemas antes de processar
+- Permite habilitar/desabilitar cada tipo de correção individualmente
+- Focado em correções técnicas (sem otimização de tamanho)
+- Usa `copy` mode quando possível (rápido) ou re-encoda apenas quando necessário (VFR)
+- Controle de recursos (CPU, memória, threads)
+- Barra de progresso em tempo real
+
 ### Menus Atualizados ✅
 
-- ✅ `start.bat` atualizado com todos os 15 scripts
-- ✅ `start.sh` atualizado com todos os 15 scripts
+- ✅ `start.bat` atualizado com todos os 16 scripts
+- ✅ `start.sh` atualizado com todos os 16 scripts
 - ✅ Organização por categorias (Imagens/Vídeos)
 - ✅ Numeração clara e intuitiva
 

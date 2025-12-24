@@ -102,6 +102,12 @@ Bem-vindo à documentação completa do projeto Media Tools!
     - Otimizado para vídeos grandes
     - Remoção automática opcional
 
+16. **[Corretor de Vídeos](corretor-video.md)**
+    - Corrige problemas de framerate (VFR)
+    - Corrige problemas com timestamps
+    - Corrige dessincronia de áudio
+    - Focado em correções técnicas (sem otimização)
+
 ## 📖 Como Usar Esta Documentação
 
 1. **Começando**: Leia o [README.md](../README.md) principal

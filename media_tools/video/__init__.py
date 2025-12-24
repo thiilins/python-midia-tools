@@ -8,6 +8,7 @@ from .extractor import ExtratorAudio, ExtratorThumbnails
 from .merger import MergerVideos
 from .stabilizer import EstabilizadorVideo
 from .duplicate_detector import DetectorDuplicatasVideos
+from .corrector import CorretorVideo
 
 __all__ = [
     "OtimizadorVideo",
@@ -17,4 +18,5 @@ __all__ = [
     "MergerVideos",
     "EstabilizadorVideo",
     "DetectorDuplicatasVideos",
+    "CorretorVideo",
 ]

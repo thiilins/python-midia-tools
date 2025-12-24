@@ -1,14 +1,15 @@
 """
-Otimizador de vídeos (MP4, M4V, MOV).
+Corretor de vídeos - Correção de framerate e problemas gerais.
 """
 
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict, Optional, Tuple
 
 from ..common.paths import criar_pastas, obter_pastas_entrada_saida
 from ..common.progress import ProgressBar
@@ -17,77 +18,39 @@ from ..common.resource_control import (
     obter_configuracao_threads,
     obter_configuracao_limite_cpu,
     obter_configuracao_limite_memoria,
-    usar_aceleracao_hardware,
     obter_pausa_entre_videos,
     verificar_recursos_disponiveis,
     aguardar_recursos_disponiveis,
     definir_prioridade_processo,
     pausar_entre_processamentos,
 )
-from .corrector import CorretorVideo
 
 
-class OtimizadorVideo:
+class CorretorVideo:
     """
-    Classe para otimizar vídeos usando FFmpeg.
+    Classe para corrigir problemas em vídeos (VFR, timestamps, áudio).
     """
 
     # Extensões suportadas
     EXTENSOES_VALIDAS = {".mp4", ".m4v", ".mov"}
 
-    # Configurações padrão
-    CRF_VALUE = "23"
-    PRESET_VALUE = "medium"
-
-    # Presets pré-configurados
-    PRESETS = {
-        "ultra_fast": {
-            "crf": "28",
-            "preset": "ultrafast",
-            "descricao": "Muito rápido, menor qualidade (compressão máxima)",
-        },
-        "fast": {
-            "crf": "26",
-            "preset": "fast",
-            "descricao": "Rápido, qualidade média-baixa",
-        },
-        "medium": {
-            "crf": "23",
-            "preset": "medium",
-            "descricao": "Balanceado, qualidade boa (padrão)",
-        },
-        "high_quality": {
-            "crf": "20",
-            "preset": "slow",
-            "descricao": "Alta qualidade, mais lento",
-        },
-        "maximum": {
-            "crf": "18",
-            "preset": "veryslow",
-            "descricao": "Máxima qualidade, muito lento",
-        },
-    }
-
     def __init__(
         self,
         pasta_entrada: Path = None,
         pasta_saida: Path = None,
-        crf: str = None,
-        preset: str = None,
-        preset_nome: str = None,
-        corrigir_problemas: bool = True,
+        corrigir_vfr: bool = True,
+        corrigir_timestamps: bool = True,
+        corrigir_audio: bool = True,
     ):
         """
-        Inicializa o otimizador.
+        Inicializa o corretor.
 
         Args:
             pasta_entrada: Pasta de entrada (None = padrão).
             pasta_saida: Pasta de saída (None = padrão).
-            crf: Valor CRF para qualidade (None = padrão ou preset).
-            preset: Preset de velocidade FFmpeg (None = padrão ou preset).
-            preset_nome: Nome do preset pré-configurado (None = usa crf/preset individuais).
-                        Opções: "ultra_fast", "fast", "medium", "high_quality", "maximum"
-            corrigir_problemas: Se True, detecta e corrige problemas (VFR, timestamps, etc).
+            corrigir_vfr: Se True, corrige Variable Frame Rate.
+            corrigir_timestamps: Se True, corrige problemas com timestamps.
+            corrigir_audio: Se True, corrige dessincronia de áudio.
         """
         if pasta_entrada is None or pasta_saida is None:
             entrada, saida = obter_pastas_entrada_saida("videos")
@@ -97,55 +60,18 @@ class OtimizadorVideo:
             self.pasta_entrada = pasta_entrada
             self.pasta_saida = pasta_saida
 
-        # Se preset_nome foi fornecido, usa as configurações do preset
-        if preset_nome:
-            if preset_nome in self.PRESETS:
-                preset_config = self.PRESETS[preset_nome]
-                self.crf = preset_config["crf"]
-                self.preset = preset_config["preset"]
-                self.preset_nome = preset_nome
-            else:
-                print(f"⚠️  Preset '{preset_nome}' não encontrado. Usando 'medium'.")
-                preset_config = self.PRESETS["medium"]
-                self.crf = preset_config["crf"]
-                self.preset = preset_config["preset"]
-                self.preset_nome = "medium"
-        else:
-            # Usa valores individuais ou padrão
-            self.crf = crf or self.CRF_VALUE
-            self.preset = preset or self.PRESET_VALUE
-            self.preset_nome = None
-
-        self.corrigir_problemas = corrigir_problemas
-
-        # Instancia o corretor de vídeo para detecção e correção de problemas
-        self.corretor = CorretorVideo(
-            pasta_entrada=self.pasta_entrada,
-            pasta_saida=self.pasta_saida,
-            corrigir_vfr=corrigir_problemas,
-            corrigir_timestamps=corrigir_problemas,
-            corrigir_audio=corrigir_problemas,
-        )
+        self.corrigir_vfr = corrigir_vfr
+        self.corrigir_timestamps = corrigir_timestamps
+        self.corrigir_audio = corrigir_audio
 
         # Configurações de controle de recursos
         self.threads = obter_configuracao_threads()
         self.limite_cpu = obter_configuracao_limite_cpu()
         self.limite_memoria = obter_configuracao_limite_memoria()
-        self.usar_gpu = usar_aceleracao_hardware()
         self.pausa_entre_videos = obter_pausa_entre_videos()
 
         # Define prioridade do processo (menor prioridade = menos impacto no sistema)
         definir_prioridade_processo(nice=5)
-
-    @classmethod
-    def listar_presets(cls) -> dict:
-        """
-        Lista todos os presets disponíveis.
-
-        Returns:
-            dict: Dicionário com presets e suas descrições.
-        """
-        return cls.PRESETS
 
     def _obter_info_video(self, arquivo: Path) -> Dict:
         """
@@ -155,7 +81,7 @@ class OtimizadorVideo:
             arquivo: Caminho do arquivo de vídeo.
 
         Returns:
-            dict: Informações do vídeo (codec, resolução, bitrate, duração, etc.)
+            dict: Informações do vídeo (codec, resolução, bitrate, duração, fps, etc.)
         """
         comando = [
             "ffprobe",
@@ -221,7 +147,7 @@ class OtimizadorVideo:
                 info["tamanho"] = int(format_info.get("size", 0))
 
             return info
-        except Exception as e:
+        except Exception:
             return {
                 "codec": "unknown",
                 "width": 0,
@@ -232,27 +158,6 @@ class OtimizadorVideo:
                 "duracao": 0,
                 "tamanho": 0,
             }
-
-    def _ja_otimizado(self, info_original: Dict, crf_target: str) -> bool:
-        """
-        Verifica se o vídeo já está otimizado.
-
-        Args:
-            info_original: Informações do vídeo original.
-            crf_target: CRF alvo.
-
-        Returns:
-            bool: True se já está otimizado.
-        """
-        # Se já é H.264 e tem resolução razoável, pode estar otimizado
-        if info_original["codec"] == "h264":
-            # Verifica se tem bitrate baixo (indicando compressão)
-            if info_original["bitrate_total"]:
-                # Bitrate muito alto pode indicar que não foi otimizado
-                if info_original["bitrate_total"] > 5000:  # > 5 Mbps
-                    return False
-            return True
-        return False
 
     def _obter_duracao_video(self, arquivo: Path) -> float:
         """
@@ -303,32 +208,94 @@ class OtimizadorVideo:
         except ValueError:
             return 0.0
 
-    def _detectar_problemas(self, arquivo: Path) -> Dict:
+    def detectar_problemas(self, arquivo: Path) -> Dict:
         """
         Detecta problemas no vídeo (VFR, timestamps, áudio).
-        Usa o CorretorVideo para detecção.
 
         Args:
             arquivo: Caminho do arquivo de vídeo.
 
         Returns:
-            dict: Problemas detectados.
+            dict: Problemas detectados com chaves:
+                - vfr: bool - Variable Frame Rate detectado
+                - timestamps: bool - Problemas com timestamps
+                - audio_desync: bool - Dessincronia de áudio detectada
         """
-        if not self.corrigir_problemas:
-            return {"vfr": False, "timestamps": False, "audio_desync": False}
+        problemas = {
+            "vfr": False,  # Variable Frame Rate
+            "timestamps": False,
+            "audio_desync": False,
+        }
 
-        return self.corretor.detectar_problemas(arquivo)
+        if shutil.which("ffprobe") is None:
+            return problemas
 
-    def _converter_video(
-        self, arquivo_entrada: Path, arquivo_saida: Path, apenas_corrigir: bool = False
-    ) -> tuple[bool, Optional[str]]:
+        try:
+            # Verifica frame rate variável
+            cmd = [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=r_frame_rate",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(arquivo),
+            ]
+            resultado = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if resultado.returncode == 0:
+                fps_str = resultado.stdout.strip()
+                if fps_str and "/" in fps_str:
+                    num, den = map(int, fps_str.split("/"))
+                    if den > 0:
+                        fps = num / den
+                        # FPS muito variável ou não inteiro pode indicar VFR
+                        # Também verifica se está fora de faixas comuns
+                        if fps < 10 or fps > 120 or fps != int(fps):
+                            problemas["vfr"] = True
+
+            # Verifica se há stream de áudio e se está sincronizado
+            cmd_audio = [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(arquivo),
+            ]
+            resultado_audio = subprocess.run(
+                cmd_audio, capture_output=True, text=True, timeout=10
+            )
+            if resultado_audio.returncode != 0:
+                # Sem áudio pode causar problemas de sincronia
+                problemas["audio_desync"] = True
+
+            # Timestamps: verifica se há problemas com PTS
+            # Se o vídeo tem problemas de timestamps, geralmente aparece em erros do FFmpeg
+            # Aqui assumimos que se VFR ou audio_desync, pode ter problemas de timestamps
+            if problemas["vfr"] or problemas["audio_desync"]:
+                problemas["timestamps"] = True
+
+        except Exception:
+            pass
+
+        return problemas
+
+    def corrigir_video(
+        self, arquivo_entrada: Path, arquivo_saida: Path
+    ) -> Tuple[bool, Optional[str]]:
         """
-        Converte o vídeo usando FFmpeg com barra de progresso.
+        Corrige problemas no vídeo usando FFmpeg com barra de progresso.
 
         Args:
             arquivo_entrada: Caminho do arquivo de entrada.
             arquivo_saida: Caminho do arquivo de saída.
-            apenas_corrigir: Se True, apenas corrige problemas sem re-encodar (usa copy).
 
         Returns:
             Tuple[bool, Optional[str]]: (sucesso, mensagem_erro)
@@ -338,17 +305,26 @@ class OtimizadorVideo:
         if duracao_total == 0:
             duracao_total = 100  # Fallback
 
-        # Detecta problemas se habilitado
-        problemas = self._detectar_problemas(arquivo_entrada)
-        aplicar_correcoes = self.corrigir_problemas and any(problemas.values())
+        # Detecta problemas
+        problemas = self.detectar_problemas(arquivo_entrada)
+
+        # Determina quais correções aplicar baseado nas configurações
+        aplicar_vfr = self.corrigir_vfr and problemas["vfr"]
+        aplicar_timestamps = self.corrigir_timestamps and problemas["timestamps"]
+        aplicar_audio = self.corrigir_audio and problemas["audio_desync"]
+
+        aplicar_correcoes = aplicar_vfr or aplicar_timestamps or aplicar_audio
+
+        if not aplicar_correcoes:
+            return False, "Nenhum problema detectado ou correções desabilitadas"
 
         if aplicar_correcoes:
             print(f"   🔍 Problemas detectados:")
-            if problemas["vfr"]:
+            if aplicar_vfr:
                 print(f"      ⚠️  Frame rate variável (VFR) - será corrigido")
-            if problemas["timestamps"]:
+            if aplicar_timestamps:
                 print(f"      ⚠️  Problemas com timestamps - será corrigido")
-            if problemas["audio_desync"]:
+            if aplicar_audio:
                 print(f"      ⚠️  Possível dessincronia de áudio - será corrigido")
 
         # Comando FFmpeg base
@@ -377,7 +353,7 @@ class OtimizadorVideo:
         filtros_video = []
         precisa_reencodar_video = False
 
-        if aplicar_correcoes and problemas["vfr"]:
+        if aplicar_vfr:
             # VFR requer re-encodar para aplicar filtro fps
             precisa_reencodar_video = True
             # Força FPS constante baseado no FPS detectado ou usa 30fps padrão
@@ -390,9 +366,8 @@ class OtimizadorVideo:
             filtros_video.append(f"fps={fps_alvo}")
 
         # Configurações de codificação
-        if apenas_corrigir and not precisa_reencodar_video:
-            # Se apenas corrigir e não precisa re-encodar vídeo, usa copy
-            # (apenas timestamps/áudio, sem VFR)
+        if not precisa_reencodar_video:
+            # Se não precisa re-encodar vídeo, usa copy
             comando.extend(
                 [
                     "-c:v",
@@ -400,44 +375,26 @@ class OtimizadorVideo:
                 ]
             )
         else:
-            # Re-encoda com H.264 (otimização normal ou correção de VFR)
-            # Não usa aceleração de hardware por padrão (pode ser fraca ou não disponível)
-            if self.usar_gpu:
-                # Tenta usar GPU (h264_nvenc para NVIDIA, h264_amf para AMD)
-                # Nota: RX 580 pode não ter suporte adequado, então desabilitado por padrão
-                comando.extend(
-                    [
-                        "-c:v",
-                        "libx264",  # Mantém software encoding por segurança
-                        "-crf",
-                        self.crf,
-                        "-preset",
-                        self.preset,
-                        "-threads",
-                        str(self.threads),  # Limita threads para evitar sobrecarga
-                    ]
-                )
-            else:
-                # Encoding via software (CPU) com threads limitadas
-                comando.extend(
-                    [
-                        "-c:v",
-                        "libx264",
-                        "-crf",
-                        self.crf,
-                        "-preset",
-                        self.preset,
-                        "-threads",
-                        str(self.threads),  # Limita threads para evitar sobrecarga
-                    ]
-                )
+            # Re-encoda com H.264 (correção de VFR)
+            comando.extend(
+                [
+                    "-c:v",
+                    "libx264",
+                    "-crf",
+                    "23",  # Qualidade padrão para correções
+                    "-preset",
+                    "medium",
+                    "-threads",
+                    str(self.threads),
+                ]
+            )
 
         # Aplica filtros de vídeo se houver (requer re-encodar)
         if filtros_video:
             comando.extend(["-filter:v", ",".join(filtros_video)])
 
         # Áudio com correções se necessário
-        filtro_audio = "aresample=async=1" if aplicar_correcoes else None
+        filtro_audio = "aresample=async=1" if aplicar_audio else None
 
         comando.extend(
             [
@@ -461,7 +418,7 @@ class OtimizadorVideo:
             ]
         )
 
-        if aplicar_correcoes:
+        if aplicar_timestamps or aplicar_audio:
             # Flags para corrigir timestamps e problemas de sincronia
             comando.extend(
                 [
@@ -514,7 +471,7 @@ class OtimizadorVideo:
             with ProgressBar(
                 total=int(duracao_total),
                 unit="s",
-                desc=f"🎬 {arquivo_entrada.name[:20]}...",
+                desc=f"🔧 {arquivo_entrada.name[:20]}...",
             ).context() as pbar:
                 tempo_anterior = 0.0
 
@@ -575,13 +532,9 @@ class OtimizadorVideo:
                 stderr_text = "".join(stderr_output)
 
             # Código de retorno válido no Windows/Linux é geralmente 0-255
-            # Valores muito grandes indicam erro de sistema ou processo morto
-            # No Windows, códigos negativos ou muito grandes podem indicar problemas
             if returncode is None:
                 return False, "FFmpeg não retornou código de saída"
 
-            # No Windows, códigos de retorno podem ser valores grandes quando o processo é morto
-            # Verifica se é um código válido (0-255) ou um código de erro do Windows
             if returncode < 0 or (returncode > 255 and returncode != 0xFFFFFFFF):
                 # Tenta obter mais informações do stderr
                 erro_msg = "FFmpeg foi interrompido ou terminou de forma anormal"
@@ -638,9 +591,9 @@ class OtimizadorVideo:
                         erro_msg += f" | FFmpeg: {linhas_erro[-1][:200]}"
             return False, erro_msg
 
-    def processar(self, deletar_originais: bool = True) -> dict:
+    def processar(self, deletar_originais: bool = False) -> dict:
         """
-        Processa todos os vídeos na pasta de entrada.
+        Processa todos os vídeos na pasta de entrada, corrigindo problemas.
 
         Args:
             deletar_originais: Se True, deleta os arquivos originais após processar.
@@ -668,19 +621,14 @@ class OtimizadorVideo:
             print("ℹ️  Nenhum vídeo encontrado.")
             return {"sucessos": 0, "falhas": 0, "pulados": 0}
 
-        print(f"\n🚀 Iniciando otimização de {len(arquivos)} vídeo(s)...")
-        if self.preset_nome:
-            preset_info = self.PRESETS[self.preset_nome]
-            print(f"⚙️  Preset: {self.preset_nome} - {preset_info['descricao']}")
-            print(f"   Configuração: CRF {self.crf} | Preset {self.preset}")
-        else:
-            print(f"⚙️  Configuração: CRF {self.crf} | Preset {self.preset}")
+        print(f"\n🔧 Iniciando correção de {len(arquivos)} vídeo(s)...")
+        print(f"⚙️  Correções habilitadas:")
+        print(f"   VFR: {'✅' if self.corrigir_vfr else '❌'}")
+        print(f"   Timestamps: {'✅' if self.corrigir_timestamps else '❌'}")
+        print(f"   Áudio: {'✅' if self.corrigir_audio else '❌'}")
         print(f"🔧 Controle de recursos:")
         print(
             f"   Threads: {self.threads} | Limite CPU: {self.limite_cpu:.0f}% | Limite Memória: {self.limite_memoria:.0f}%"
-        )
-        print(
-            f"   GPU: {'Habilitada' if self.usar_gpu else 'Desabilitada (uso de CPU apenas)'}"
         )
         print("-" * 60)
 
@@ -705,44 +653,22 @@ class OtimizadorVideo:
             # Obtém informações antes
             info_antes = self._obter_info_video(arquivo_origem)
 
-            # Verifica se já está otimizado
-            ja_otimizado = self._ja_otimizado(info_antes, self.crf)
+            # Detecta problemas
+            problemas = self.detectar_problemas(arquivo_origem)
 
-            # Se está otimizado, verifica se tem problemas que precisam correção
-            if ja_otimizado and self.corrigir_problemas:
-                problemas = self._detectar_problemas(arquivo_origem)
-                tem_problemas = any(problemas.values())
+            # Verifica se há problemas para corrigir
+            tem_problemas = False
+            if self.corrigir_vfr and problemas["vfr"]:
+                tem_problemas = True
+            if self.corrigir_timestamps and problemas["timestamps"]:
+                tem_problemas = True
+            if self.corrigir_audio and problemas["audio_desync"]:
+                tem_problemas = True
 
-                if not tem_problemas:
-                    # Está otimizado E sem problemas - pode pular
-                    print(
-                        f"\n[{i}/{len(arquivos)}] ⏭️  {arquivo_origem.name}: já otimizado"
-                    )
-                    print(
-                        f"   Info: {info_antes['width']}x{info_antes['height']} | "
-                        f"{info_antes['codec']} | "
-                        f"{info_antes['bitrate_total']:.0f}kbps"
-                        if info_antes.get("bitrate_total")
-                        else "N/A"
-                    )
-                    pulados += 1
-                    continue
-                else:
-                    # Está otimizado MAS tem problemas - precisa corrigir
-                    print(
-                        f"\n[{i}/{len(arquivos)}] 🔧 {arquivo_origem.name}: otimizado, mas com problemas"
-                    )
-                    print(
-                        f"   Info: {info_antes['width']}x{info_antes['height']} | "
-                        f"{info_antes['codec']} | "
-                        f"{info_antes['bitrate_total']:.0f}kbps"
-                        if info_antes.get("bitrate_total")
-                        else "N/A"
-                    )
-                    print(f"   ⚠️  Aplicando apenas correções (sem re-otimizar)")
-            elif ja_otimizado and not self.corrigir_problemas:
-                # Está otimizado e correções desabilitadas - pode pular
-                print(f"\n[{i}/{len(arquivos)}] ⏭️  {arquivo_origem.name}: já otimizado")
+            if not tem_problemas:
+                print(
+                    f"\n[{i}/{len(arquivos)}] ⏭️  {arquivo_origem.name}: sem problemas detectados"
+                )
                 print(
                     f"   Info: {info_antes['width']}x{info_antes['height']} | "
                     f"{info_antes['codec']} | "
@@ -755,11 +681,7 @@ class OtimizadorVideo:
 
             tamanho_original = arquivo_origem.stat().st_size / (1024 * 1024)
 
-            # Determina se deve apenas corrigir (sem re-encodar)
-            apenas_corrigir = ja_otimizado and self.corrigir_problemas
-
-            if not apenas_corrigir:
-                print(f"\n[{i}/{len(arquivos)}] 📹 {arquivo_origem.name}")
+            print(f"\n[{i}/{len(arquivos)}] 🔧 {arquivo_origem.name}")
             print(
                 f"   Antes: {info_antes['width']}x{info_antes['height']} | "
                 f"{info_antes['codec']} | "
@@ -768,18 +690,15 @@ class OtimizadorVideo:
                 else "N/A"
             )
 
-            sucesso, erro = self._converter_video(
-                arquivo_origem, arquivo_destino, apenas_corrigir=apenas_corrigir
-            )
+            sucesso, erro = self.corrigir_video(arquivo_origem, arquivo_destino)
 
             if sucesso and arquivo_destino.exists():
                 info_depois = self._obter_info_video(arquivo_destino)
                 tamanho_novo = arquivo_destino.stat().st_size / (1024 * 1024)
-                reducao = 100 - (tamanho_novo / tamanho_original * 100)
 
                 print(f"   ✅ Finalizado.")
                 print(
-                    f"   📊 Redução: {reducao:.1f}% ({tamanho_original:.2f}MB -> {tamanho_novo:.2f}MB)"
+                    f"   📊 Tamanho: {tamanho_original:.2f}MB -> {tamanho_novo:.2f}MB"
                 )
                 print(
                     f"   Depois: {info_depois['width']}x{info_depois['height']} | "
@@ -809,9 +728,10 @@ class OtimizadorVideo:
         print("-" * 60)
         print(f"✅ Sucessos: {sucessos}")
         if pulados > 0:
-            print(f"⏭️  Pulados (já otimizados): {pulados}")
+            print(f"⏭️  Pulados (sem problemas): {pulados}")
         print(f"❌ Falhas: {falhas}")
         print("-" * 60)
         print("✨ Processo finalizado!")
 
         return {"sucessos": sucessos, "falhas": falhas, "pulados": pulados}
+
