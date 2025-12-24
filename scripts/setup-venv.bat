@@ -64,26 +64,42 @@ python -m pip install --upgrade pip --quiet
 
 REM Tenta instalar NumPy primeiro (Python 3.14 pode precisar de versao especifica)
 echo.
-echo [INFO] Tentando instalar NumPy (pode demorar se precisar compilar)...
+echo [INFO] Instalando NumPy primeiro (Python 3.14 pode precisar de versao especifica)...
 python -m pip install numpy --only-binary :all: --quiet 2>nul
 if errorlevel 1 (
     echo [AVISO] NumPy nao encontrou wheel pre-compilada para Python 3.14.
-    echo [AVISO] Tentando instalar versao mais recente disponivel...
+    echo [AVISO] Tentando instalar versao mais recente disponivel (pode demorar)...
     python -m pip install numpy --upgrade --quiet
+    if errorlevel 1 (
+        echo [ERRO] Falha ao instalar NumPy.
+        echo.
+        echo [INFO] Python 3.14 e muito novo e nao tem wheels pre-compiladas do NumPy.
+        echo [INFO] Solucoes:
+        echo   1. Instale Visual Studio Build Tools: https://visualstudio.microsoft.com/downloads/
+        echo   2. Use Python 3.11 ou 3.12 (melhor suporte de wheels)
+        echo   3. Instale NumPy manualmente: pip install numpy
+        pause
+        popd
+        exit /b 1
+    )
 )
 
-REM Instala demais dependencias
+REM Cria requirements temporario sem NumPy para evitar conflito
 echo [INFO] Instalando demais dependencias...
-pip install -r requirements.txt
+findstr /v /i "^numpy" requirements.txt > requirements_temp.txt 2>nul
+if exist requirements_temp.txt (
+    pip install -r requirements_temp.txt
+    del requirements_temp.txt
+) else (
+    REM Se findstr nao funcionar, tenta instalar tudo (NumPy ja esta instalado)
+    pip install -r requirements.txt --no-deps
+    pip install -r requirements.txt
+)
+
 if errorlevel 1 (
     echo.
-    echo [ERRO] Falha ao instalar dependencias.
-    echo.
-    echo [INFO] Python 3.14 e muito novo e pode nao ter wheels para todas as dependencias.
-    echo [INFO] Solucoes:
-    echo   1. Instale Visual Studio Build Tools: https://visualstudio.microsoft.com/downloads/
-    echo   2. Use Python 3.11 ou 3.12 (melhor suporte de wheels)
-    echo   3. Instale NumPy manualmente: pip install numpy
+    echo [ERRO] Falha ao instalar algumas dependencias.
+    echo [INFO] Tente instalar manualmente: pip install -r requirements.txt
     pause
     popd
     exit /b 1
