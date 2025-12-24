@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import shutil
+import threading
 from pathlib import Path
 from typing import Optional, Dict
 
@@ -533,14 +534,33 @@ class OtimizadorVideo:
         # Regex para capturar o tempo processado
         regex_tempo = re.compile(r"out_time=(\d{2}:\d{2}:\d{2}\.\d+)")
 
+        # Captura stderr para diagnóstico de erros
+        stderr_output = []
+        stderr_lock = threading.Lock()
+
+        def ler_stderr():
+            """Thread para ler stderr sem bloquear."""
+            nonlocal stderr_output
+            try:
+                for linha in processo.stderr:
+                    with stderr_lock:
+                        stderr_output.append(linha)
+            except Exception:
+                pass
+
         try:
             processo = subprocess.Popen(
                 comando,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 text=True,
                 universal_newlines=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
+
+            # Inicia thread para ler stderr
+            stderr_thread = threading.Thread(target=ler_stderr, daemon=True)
+            stderr_thread.start()
 
             with ProgressBar(
                 total=int(duracao_total),
@@ -549,10 +569,15 @@ class OtimizadorVideo:
             ).context() as pbar:
                 tempo_anterior = 0.0
 
+                # Lê stdout linha por linha
                 while True:
                     linha = processo.stdout.readline()
-                    if not linha and processo.poll() is not None:
-                        break
+                    if not linha:
+                        # Verifica se o processo terminou
+                        if processo.poll() is not None:
+                            break
+                        # Se não terminou mas não há mais linhas, aguarda um pouco
+                        continue
 
                     match = regex_tempo.search(linha)
                     if match:
@@ -578,13 +603,91 @@ class OtimizadorVideo:
                 if pbar.n < int(duracao_total):
                     pbar.update(int(duracao_total) - pbar.n)
 
-            if processo.returncode == 0:
+            # Espera o processo terminar completamente
+            try:
+                processo.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                # Se exceder o timeout, mata o processo
+                try:
+                    processo.kill()
+                    processo.wait(timeout=2)
+                except Exception:
+                    pass
+                return False, "FFmpeg excedeu o tempo limite de espera"
+
+            # Aguarda thread de stderr terminar
+            stderr_thread.join(timeout=2)
+
+            # Obtém o código de retorno
+            returncode = processo.returncode
+
+            # Converte stderr para string
+            with stderr_lock:
+                stderr_text = "".join(stderr_output)
+
+            # Código de retorno válido no Windows/Linux é geralmente 0-255
+            # Valores muito grandes indicam erro de sistema ou processo morto
+            # No Windows, códigos negativos ou muito grandes podem indicar problemas
+            if returncode is None:
+                return False, "FFmpeg não retornou código de saída"
+
+            # No Windows, códigos de retorno podem ser valores grandes quando o processo é morto
+            # Verifica se é um código válido (0-255) ou um código de erro do Windows
+            if returncode < 0 or (returncode > 255 and returncode != 0xFFFFFFFF):
+                # Tenta obter mais informações do stderr
+                erro_msg = "FFmpeg foi interrompido ou terminou de forma anormal"
+                if stderr_text:
+                    # Pega as últimas linhas de erro do FFmpeg
+                    linhas_erro = [
+                        linha.strip()
+                        for linha in stderr_text.split("\n")
+                        if linha.strip()
+                        and (
+                            "error" in linha.lower()
+                            or "failed" in linha.lower()
+                            or "cannot" in linha.lower()
+                        )
+                    ]
+                    if linhas_erro:
+                        # Pega a última linha de erro relevante
+                        erro_msg += f": {linhas_erro[-1][:200]}"
+                return False, erro_msg
+
+            if returncode == 0:
                 return True, None
             else:
-                return False, f"FFmpeg retornou código {processo.returncode}"
+                # Código de erro válido do FFmpeg
+                erro_msg = f"FFmpeg retornou código {returncode}"
+                if stderr_text:
+                    linhas_erro = [
+                        linha.strip()
+                        for linha in stderr_text.split("\n")
+                        if linha.strip()
+                        and (
+                            "error" in linha.lower()
+                            or "failed" in linha.lower()
+                            or "cannot" in linha.lower()
+                        )
+                    ]
+                    if linhas_erro:
+                        erro_msg += f": {linhas_erro[-1][:200]}"
+                return False, erro_msg
 
         except Exception as e:
-            return False, str(e)
+            # Tenta obter informações do stderr se disponível
+            erro_msg = f"Erro ao executar FFmpeg: {str(e)}"
+            with stderr_lock:
+                if stderr_output:
+                    stderr_text = "".join(stderr_output)
+                    linhas_erro = [
+                        linha.strip()
+                        for linha in stderr_text.split("\n")
+                        if linha.strip()
+                        and ("error" in linha.lower() or "failed" in linha.lower())
+                    ]
+                    if linhas_erro:
+                        erro_msg += f" | FFmpeg: {linhas_erro[-1][:200]}"
+            return False, erro_msg
 
     def processar(self, deletar_originais: bool = True) -> dict:
         """
