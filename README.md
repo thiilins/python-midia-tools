@@ -12,7 +12,8 @@ Ferramenta modular e padronizada para processamento de imagens e vídeos.
 
 ### Vídeos
 
-- **Otimização**: Otimiza MP4, M4V e MOV usando H.264
+- **Compressão H.265 (padrão)**: Comprime MP4, M4V e MOV para 720p com H.265/HEVC — menor tamanho, melhor qualidade
+- **Otimização H.264**: Otimiza vídeos mantendo resolução original com H.264
 - **Conversão WebM → MP4**: Converte WebM para MP4 corrigindo timestamps e VFR
 
 ## 📚 Documentação
@@ -289,7 +290,16 @@ Execute `scripts/start.bat` (Windows) ou `scripts/start.sh` (Linux/macOS) e esco
 7. **Corretor de Cores**: Ajusta brilho, contraste e aplica filtros
 8. **Gerar Thumbnails**: Gera thumbnails de imagens e vídeos
 
-**Vídeos:** 9. **Otimizar Vídeos**: Processa MP4, M4V e MOV na pasta `entrada/videos/` 10. **Converter WebM → MP4**: Converte WebM para MP4 na pasta `entrada/videos/` 11. **Extrair Áudio**: Extrai áudio de vídeos (MP3, AAC, OGG, WAV) 12. **Extrair Thumbnails**: Extrai thumbnails de vídeos 13. **Merge Vídeos**: Concatena múltiplos vídeos 14. **Estabilizador**: Estabiliza vídeos tremidos 15. **Detectar Duplicatas de Vídeos**: Encontra vídeos duplicados
+**Vídeos:**
+
+9. **Comprimir Vídeos (H.265)**: Comprime para 720p com H.265 — pasta `entrada/videos/`
+10. **Otimizar Vídeos (H.264)**: Processa MP4, M4V e MOV na pasta `entrada/videos/`
+11. **Converter WebM → MP4**: Converte WebM para MP4 na pasta `entrada/videos/`
+12. **Extrair Áudio**: Extrai áudio de vídeos (MP3, AAC, OGG, WAV)
+13. **Extrair Thumbnails**: Extrai thumbnails de vídeos
+14. **Merge Vídeos**: Concatena múltiplos vídeos
+15. **Estabilizador**: Estabiliza vídeos tremidos
+16. **Detectar Duplicatas de Vídeos**: Encontra vídeos duplicados
 
 ### Via Linha de Comando
 
@@ -341,9 +351,18 @@ python gerador-thumbnails.py          # Gerar thumbnails
 **Vídeos:**
 
 ```bash
-python otimizador-video.py            # Otimizar vídeos (MP4, M4V, MOV)
+# Compressor H.265 — 720p (padrão recomendado)
+python otimizador-compressor-video.py                         # Usa perfil Master 720p
+python otimizador-compressor-video.py --preset master_720p    # Mesmo que acima (explícito)
+python otimizador-compressor-video.py --preset ultra_compression_720p  # CRF 32 — arquivo mínimo
+python otimizador-compressor-video.py --preset ultra_compression_1080p # 1080p comprimido
+python otimizador-compressor-video.py --preset maximum_compression     # Sem reduzir resolução
+python otimizador-compressor-video.py --presets                        # Lista todos os perfis
+
+# Outros processamentos
+python otimizador-video.py            # Otimizar vídeos com H.264
 python webm-mp4.py                    # Converter WebM para MP4
-python extrair-audio.py                # Extrair áudio de vídeos
+python extrair-audio.py               # Extrair áudio de vídeos
 python extrair-thumbnails.py          # Extrair thumbnails de vídeos
 python merge-videos.py                # Concatenar múltiplos vídeos
 python estabilizador-video.py         # Estabilizar vídeos tremidos
@@ -361,7 +380,35 @@ python detector-duplicatas-videos.py  # Detectar vídeos duplicados
 - **Pasta de entrada**: `entrada/imagens/`
 - **Pasta de saída**: `saida/imagens/`
 
-### Otimizador de Vídeos
+### Compressor de Vídeos (otimizador-compressor-video.py)
+
+Perfil padrão **Master 720p** — melhor equilíbrio qualidade/tamanho:
+
+| Parâmetro | Valor | Motivo |
+| :--- | :--- | :--- |
+| **Codec** | H.265 (libx265) | ~50% menor que H.264 mesma qualidade |
+| **Resolução** | 720p (1280×720) | Reduz apenas se o original for maior |
+| **CRF** | 23 | Sweet spot qualidade/compressão |
+| **Preset** | slow | Mais tempo = arquivo menor |
+| **Áudio** | AAC 96kbps stereo | Eficiente para 720p |
+| **Saída** | sempre `.mp4` | Independente do formato de entrada |
+
+**Pasta de entrada**: `entrada/videos/`
+**Pasta de saída**: `saida/videos/`
+
+Perfis disponíveis (use `--preset <nome>`):
+
+| Preset | CRF | Resolução | Indicado para |
+| :--- | :--- | :--- | :--- |
+| `master_720p` **(padrão)** | 23 | 720p | Qualidade + tamanho equilibrados |
+| `balanced_compression` | 28 | original | Compressão leve sem reduzir |
+| `high_compression` | 30 | original | Alta compressão, boa qualidade |
+| `maximum_compression` | 32 | original | Máxima compressão sem reduzir |
+| `ultra_compression_1080p` | 32 | 1080p | Arquivo mínimo em 1080p |
+| `ultra_compression_720p` | 32 | 720p | Arquivo mínimo em 720p |
+| `extreme_compression` | 35 | original | Extremo (perda visível) |
+
+### Otimizador de Vídeos (otimizador-video.py)
 
 - **CRF**: 23 (padrão) - qualidade constante (18-28 recomendado)
 - **Preset**: medium (padrão) - velocidade de codificação
