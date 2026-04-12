@@ -17,7 +17,9 @@
 # DEPENDÊNCIA EXTERNA NECESSÁRIA
 # ============================================
 # FFmpeg: Deve estar instalado no sistema e disponível no PATH
-#   - Necessário apenas para scripts de vídeo (otimizador-video.py, webm-mp4.py)
+#   - Necessário para todos os scripts de vídeo
+#   - Inclui: compressor, otimizador, conversor, corretor, extrator,
+#     merge, estabilizador, duplicatas, cortador, analisador, conversor-fps
 #   - Download: https://ffmpeg.org/download.html
 #
 # Instalação:

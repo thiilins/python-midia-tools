@@ -6,15 +6,28 @@ Ferramenta modular e padronizada para processamento de imagens e vídeos.
 
 ### Imagens
 
-- **Otimização**: Reduz tamanho de JPG, PNG e WebP mantendo qualidade
-- **Conversão WebP → JPG**: Converte WebP para JPG com alta qualidade
-- **Validação**: Separa imagens legíveis de ilegíveis (análise de brilho, foco, uniformidade)
+- **Otimização**: Reduz tamanho de JPG, PNG, WebP, AVIF e HEIC mantendo qualidade e EXIF
+- **Validação**: Separa imagens legíveis de ilegíveis (brilho, foco, uniformidade)
+- **Conversão WebP → JPG**: Converte WebP para JPG, animações para GIF
+- **Remoção de fundo**: Remove fundo automaticamente com IA (rembg)
+- **OCR**: Detecta texto em imagens via Tesseract (pt + en)
+- **Corretor de cores**: Ajusta brilho/contraste/saturação, filtros sépia/PB/vintage
+- **Duplicatas**: Detecta cópias exatas via hash perceptual
+- **Thumbnails**: Gera thumbnails em múltiplos tamanhos de imagens e vídeos
 
 ### Vídeos
 
-- **Compressão H.265 (padrão)**: Comprime MP4, M4V e MOV para 720p com H.265/HEVC — menor tamanho, melhor qualidade
-- **Otimização H.264**: Otimiza vídeos mantendo resolução original com H.264
+- **Compressão H.265**: Comprime para 720p com H.265/HEVC — ~50% menor que H.264
+- **Cortador (copy mode)**: Extrai segmentos por timestamp instantaneamente, sem re-encode
+- **Analisador de pasta**: Inventário técnico com codec, resolução, FPS e estimativa de compressão
+- **Conversor de FPS**: Reduz 60fps → 30fps (~30-40% menor antes de comprimir)
+- **Otimização H.264**: Otimiza mantendo resolução original com H.264
 - **Conversão WebM → MP4**: Converte WebM para MP4 corrigindo timestamps e VFR
+- **Corretor**: Corrige VFR, timestamps e dessincronia de áudio (copy mode)
+- **Extração de áudio**: Extrai MP3/AAC/OGG/WAV
+- **Merge**: Concatena vídeos sem re-encode (copy mode)
+- **Estabilizador**: Corrige vídeos tremidos via libvidstab (2 passes)
+- **Duplicatas**: Detecta cópias exatas via hash MD5 de amostras
 
 ## 📚 Documentação
 
@@ -218,59 +231,65 @@ deactivate
 ## 📦 Estrutura do Projeto
 
 ```
-python-tools/
+python-media-tools/
 ├── media_tools/              # Módulos principais
-│   ├── __init__.py
 │   ├── common/              # Utilitários compartilhados
-│   │   ├── __init__.py
 │   │   ├── paths.py         # Gerenciamento de caminhos
 │   │   ├── progress.py      # Barras de progresso
-│   │   └── validators.py     # Validações de dependências
-│   ├── image/               # Processamento de imagens
-│   │   ├── __init__.py
-│   │   ├── optimizer.py     # Otimizador de imagens
+│   │   ├── validators.py    # Validações de dependências
+│   │   └── resource_control.py  # Controle de CPU/memória/threads
+│   ├── image/               # Processamento de imagens (8 módulos)
+│   │   ├── optimizer.py     # Otimizador JPG/PNG/WebP/AVIF/HEIC
 │   │   ├── converter.py     # Conversor WebP→JPG
-│   │   └── validator.py      # Validador de legibilidade
-│   └── video/               # Processamento de vídeos
-│       ├── __init__.py
-│       ├── optimizer.py     # Otimizador de vídeos
-│       └── converter.py      # Conversor WebM→MP4
-├── entrada/                 # Pasta de entrada
+│   │   ├── validator.py     # Validador de legibilidade
+│   │   ├── color_corrector.py   # Corretor de cores e filtros
+│   │   ├── background_remover.py # Remoção de fundo com IA
+│   │   ├── ocr.py           # OCR via Tesseract
+│   │   └── duplicate_detector.py # Detector de duplicatas
+│   └── video/               # Processamento de vídeos (11 módulos)
+│       ├── compressor.py    # Compressor H.265 com presets
+│       ├── optimizer.py     # Otimizador H.264
+│       ├── converter.py     # Conversor WebM→MP4
+│       ├── corrector.py     # Corretor VFR/timestamps/áudio
+│       ├── extractor.py     # Extrator de áudio e thumbnails
+│       ├── merger.py        # Merge de vídeos (copy mode)
+│       ├── stabilizer.py    # Estabilizador via libvidstab
+│       ├── duplicate_detector.py # Detector de duplicatas
+│       ├── cutter.py        # Cortador por timestamp (copy mode)
+│       ├── analyzer.py      # Analisador de pasta com estimativas
+│       └── fps_converter.py # Conversor de FPS
+├── entrada/
 │   ├── imagens/            # Imagens para processar
-│   ├── videos/             # Vídeos para processar
-│   └── downloads/          # Imagens para validação
-├── saida/                   # Pasta de saída
-│   ├── imagens/            # Imagens processadas
-│   ├── videos/             # Vídeos processados
-│   ├── legiveis/           # Imagens legíveis
-│   └── ilegiveis/          # Imagens ilegíveis
-├── venv/                    # Ambiente virtual (criado pelo usuário)
-├── scripts/                # Scripts de inicialização
-│   ├── start.bat          # Menu interativo (Windows)
+│   └── videos/             # Vídeos para processar
+├── saida/                   # Resultados gerados
+├── scripts/
+│   ├── start.bat           # Menu interativo (Windows)
 │   ├── start.sh            # Menu interativo (Linux/macOS)
 │   ├── setup-venv.bat      # Setup venv (Windows)
 │   └── setup-venv.sh       # Setup venv (Linux/macOS)
-├── docs/                   # Documentação
-│   ├── CHANGELOG.md       # Histórico de mudanças
-│   ├── RESUMO_IMPLEMENTACAO.md  # Resumo das funcionalidades
-│   └── ESTRUTURA_PROJETO.md     # Estrutura completa
-├── otimizador-imagens.py   # Script CLI: Otimizar imagens
-├── otimizador-video.py     # Script CLI: Otimizar vídeos
-├── validate-images.py       # Script CLI: Validar imagens
-├── webm-mp4.py            # Script CLI: Converter WebM→MP4
-├── webp-to-jpg.py         # Script CLI: Converter WebP→JPG
-├── extrair-audio.py        # Script CLI: Extrair áudio
-├── extrair-thumbnails.py   # Script CLI: Extrair thumbnails
-├── merge-videos.py         # Script CLI: Merge vídeos
-├── estabilizador-video.py  # Script CLI: Estabilizar vídeo
-├── detector-duplicatas-videos.py  # Script CLI: Detectar duplicatas vídeos
-├── ocr-imagens.py          # Script CLI: OCR de imagens
-├── detector-duplicatas-imagens.py # Script CLI: Detectar duplicatas imagens
-├── remover-fundo.py        # Script CLI: Remover fundo
-├── corretor-cores.py       # Script CLI: Corretor de cores
-├── gerador-thumbnails.py   # Script CLI: Gerar thumbnails
-├── requirements.txt        # Dependências Python
-└── README.md               # Este arquivo
+├── docs/                   # Documentação local
+│── otimizador-imagens.py         # Otimizar imagens
+├── validate-images.py            # Validar imagens
+├── webp-to-jpg.py                # Converter WebP→JPG
+├── detector-duplicatas-imagens.py # Duplicatas de imagens
+├── ocr-imagens.py                # OCR de imagens
+├── remover-fundo.py              # Remover fundo
+├── corretor-cores.py             # Corretor de cores
+├── gerador-thumbnails.py         # Gerar thumbnails
+├── otimizador-compressor-video.py # Comprimir H.265
+├── otimizador-video.py           # Otimizar H.264
+├── webm-mp4.py                   # Converter WebM→MP4
+├── corretor-video.py             # Corrigir VFR/timestamps
+├── extrair-audio.py              # Extrair áudio
+├── extrair-thumbnails.py         # Extrair thumbnails
+├── merge-videos.py               # Merge vídeos
+├── estabilizador-video.py        # Estabilizar vídeos
+├── detector-duplicatas-videos.py # Duplicatas de vídeos
+├── cortar-video.py               # Cortar clips (copy mode)
+├── analisar-pasta.py             # Analisar pasta de vídeos
+├── converter-fps.py              # Converter FPS
+├── requirements.txt
+└── README.md
 ```
 
 ## 🎯 Uso
@@ -298,8 +317,12 @@ Execute `scripts/start.bat` (Windows) ou `scripts/start.sh` (Linux/macOS) e esco
 12. **Extrair Áudio**: Extrai áudio de vídeos (MP3, AAC, OGG, WAV)
 13. **Extrair Thumbnails**: Extrai thumbnails de vídeos
 14. **Merge Vídeos**: Concatena múltiplos vídeos
-15. **Estabilizador**: Estabiliza vídeos tremidos
-16. **Detectar Duplicatas de Vídeos**: Encontra vídeos duplicados
+15. **Corretor de Vídeo**: Corrige VFR, timestamps e áudio
+16. **Estabilizador**: Estabiliza vídeos tremidos
+17. **Detectar Duplicatas de Vídeos**: Encontra vídeos duplicados
+18. **Cortar Vídeo**: Extrai segmentos por timestamp (copy mode, instantâneo)
+19. **Analisar Pasta**: Inventário técnico com estimativas de compressão
+20. **Converter FPS**: Reduz framerate (60fps → 30fps, ~30-40% menor)
 
 ### Via Linha de Comando
 
@@ -351,6 +374,16 @@ python gerador-thumbnails.py          # Gerar thumbnails
 **Vídeos:**
 
 ```bash
+# Analisar antes de comprimir (recomendado)
+python analisar-pasta.py              # inventário: codec, FPS, tamanho, estimativas
+
+# Workflow streams longas (ex: 15GB, 60fps)
+python converter-fps.py --fps 30      # 1. reduz 60→30fps (~30-40% menor)
+python otimizador-compressor-video.py --preset stream_720p  # 2. H.265 720p
+
+# Cortar clips antes de comprimir
+python cortar-video.py                # extrai segmentos por timestamp (instantâneo)
+
 # Compressor H.265 (padrão recomendado)
 python otimizador-compressor-video.py                           # Perfil Master 720p (padrão)
 python otimizador-compressor-video.py --preset stream_720p      # Streams longas — 720p
@@ -364,6 +397,7 @@ python otimizador-compressor-video.py --presets                        # Lista t
 set FFMPEG_CPU_CORES=6 && python otimizador-compressor-video.py --preset stream_540p
 
 # Outros processamentos
+python corretor-video.py              # Corrigir VFR, timestamps, áudio
 python otimizador-video.py            # Otimizar vídeos com H.264
 python webm-mp4.py                    # Converter WebM para MP4
 python extrair-audio.py               # Extrair áudio de vídeos
@@ -432,6 +466,50 @@ set ENCODER_VELOCIDADE=rapido  # faster | normal (padrão) | lento
 set USAR_GPU=1              # Tenta GPU: AMD AMF / NVIDIA NVENC / Intel QSV
 set LIMITE_CPU=85           # Limite de uso de CPU em % (padrão: 85%)
 set LIMITE_MEMORIA=85       # Limite de uso de memória em % (padrão: 85%)
+```
+
+### Cortador de Vídeo (cortar-video.py)
+
+Modo interativo — lista vídeos disponíveis e solicita timestamps via terminal.
+
+- **Modo**: copy mode — sem re-encode, instantâneo mesmo em arquivos de 15GB
+- **Pasta de entrada**: `entrada/videos/`
+- **Pasta de saída**: `saida/clips/`
+- **Formatos de tempo**: `HH:MM:SS`, `MM:SS` ou segundos
+- Permite cortar múltiplos segmentos em sequência
+
+### Analisador de Pasta (analisar-pasta.py)
+
+Exibe inventário técnico completo antes de decidir o que/como comprimir.
+
+- **Informações por arquivo**: codec, resolução, FPS, bitrate, duração, tamanho
+- **Estimativa**: tamanho pós-compressão H.265 stream_720p
+- **Recomendação**: preset/workflow sugerido por arquivo
+- **Pasta padrão**: `entrada/videos/` (ou path via argumento)
+
+```bash
+python analisar-pasta.py                    # analisa entrada/videos/
+python analisar-pasta.py /minha/pasta       # analisa pasta específica
+```
+
+### Conversor de FPS (converter-fps.py)
+
+Pré-processamento para streams: reduz FPS antes de comprimir.
+
+| Passo | Script | Redução estimada |
+| :--- | :--- | :--- |
+| 1. Reduzir FPS | `converter-fps.py --fps 30` | ~30-40% |
+| 2. Comprimir H.265 | `otimizador-compressor-video.py --preset stream_720p` | ~60-70% adicional |
+
+- **FPS padrão**: 30 (configurável via `--fps N`)
+- **Codec saída**: H.264 CRF 16 (alta qualidade intermediária)
+- **Arquivos já em ≤ fps alvo**: pulados automaticamente
+- **Pasta de entrada**: `entrada/videos/`
+- **Pasta de saída**: `saida/videos/` (sufixo `_{fps}fps.mp4`)
+
+```bash
+python converter-fps.py            # converte para 30fps
+python converter-fps.py --fps 24   # converte para 24fps
 ```
 
 ### Otimizador de Vídeos (otimizador-video.py)

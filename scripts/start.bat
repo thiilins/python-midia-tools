@@ -101,13 +101,18 @@ echo   7. Corretor de Cores e Filtros
 echo   8. Gerar Thumbnails
 echo.
 echo   VIDEOS:
-echo   9. Otimizar Videos
-echo   10. Converter WebM para MP4
-echo   11. Extrair Audio de Videos
-echo   12. Extrair Thumbnails de Videos
-echo   13. Merge Videos
-echo   14. Estabilizador de Video
-echo   15. Detectar Duplicatas de Videos
+echo   9.  Comprimir Videos H.265 (recomendado)
+echo   10. Otimizar Videos H.264
+echo   11. Converter WebM para MP4
+echo   12. Extrair Audio de Videos
+echo   13. Extrair Thumbnails de Videos
+echo   14. Merge Videos
+echo   15. Corretor de Video (VFR/timestamps/audio)
+echo   16. Estabilizador de Video
+echo   17. Detectar Duplicatas de Videos
+echo   18. Cortar Video (copy mode, instantaneo)
+echo   19. Analisar Pasta de Videos
+echo   20. Converter FPS (60fps para 30fps)
 echo.
 echo   0. Sair
 echo.
@@ -121,13 +126,18 @@ set "SCRIPTS[5]=ocr-imagens.py"
 set "SCRIPTS[6]=remover-fundo.py"
 set "SCRIPTS[7]=corretor-cores.py"
 set "SCRIPTS[8]=gerador-thumbnails.py"
-set "SCRIPTS[9]=otimizador-video.py"
-set "SCRIPTS[10]=webm-mp4.py"
-set "SCRIPTS[11]=extrair-audio.py"
-set "SCRIPTS[12]=extrair-thumbnails.py"
-set "SCRIPTS[13]=merge-videos.py"
-set "SCRIPTS[14]=estabilizador-video.py"
-set "SCRIPTS[15]=detector-duplicatas-videos.py"
+set "SCRIPTS[9]=otimizador-compressor-video.py"
+set "SCRIPTS[10]=otimizador-video.py"
+set "SCRIPTS[11]=webm-mp4.py"
+set "SCRIPTS[12]=extrair-audio.py"
+set "SCRIPTS[13]=extrair-thumbnails.py"
+set "SCRIPTS[14]=merge-videos.py"
+set "SCRIPTS[15]=corretor-video.py"
+set "SCRIPTS[16]=estabilizador-video.py"
+set "SCRIPTS[17]=detector-duplicatas-videos.py"
+set "SCRIPTS[18]=cortar-video.py"
+set "SCRIPTS[19]=analisar-pasta.py"
+set "SCRIPTS[20]=converter-fps.py"
 
 if "%OPCAO%"=="0" (
     popd
