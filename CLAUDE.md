@@ -1,6 +1,6 @@
 # python-media-tools
 
-> Coleção de 17 scripts CLI para processamento de mídia — compressão H.265, otimização de imagens/vídeos, conversão de formatos, OCR, remoção de fundo e utilitários de áudio/vídeo.
+> Coleção de 20 scripts CLI para processamento de mídia — compressão H.265, otimização de imagens/vídeos, conversão de formatos, corte de vídeo, análise de pasta, conversão de FPS, OCR, remoção de fundo e utilitários de áudio/vídeo.
 
 ## Project Info
 
@@ -20,7 +20,7 @@ python-media-tools/
 ├── media_tools/
 │   ├── common/        → paths, progress, validators, resource_control
 │   ├── image/         → optimizer, converter, validator, ocr, background_remover, color_corrector, duplicate_detector
-│   └── video/         → compressor, optimizer, converter, corrector, extractor, merger, stabilizer, duplicate_detector
+│   └── video/         → compressor, optimizer, converter, corrector, extractor, merger, stabilizer, duplicate_detector, cutter, analyzer, fps_converter
 ├── entrada/
 │   ├── imagens/       → imagens para processar
 │   └── videos/        → vídeos para processar
@@ -35,6 +35,11 @@ python-media-tools/
 - `obter_pastas_entrada_saida("videos")` retorna `(entrada/videos, saida/videos)` — convenção padrão
 - x265 usa `-x265-params pools=N` (não `-threads`) para paralelismo real
 - `deletar_originais=False` é o padrão seguro em todos os processamentos
+- **Checklist novo script**: criar módulo → criar CLI → exportar em `__init__.py` → adicionar ao `start.bat` + `start.sh`
+- Scripts interativos (ex: cutter) usam `input()` no `processar()` — sem arquivo de config externo
+- `CortadorVideo`: copy mode via `-c copy -avoid_negative_ts make_zero`, saída em `saida/clips/`
+- `AnalisadorMidia`: somente leitura, 1 ffprobe por arquivo, estima com bitrate médio do preset
+- `ConversorFPS`: H.264 CRF 16 como intermediate de alta qualidade antes do H.265
 
 ## Anti-patterns
 
@@ -42,6 +47,8 @@ python-media-tools/
 - Não chamar `_obter_info_video()` e `_obter_duracao_video()` separados — duração já vem do info
 - Não usar preset `slow` como padrão no compressor — 3-5x mais lento por ~10% de diferença
 - Não misturar vídeos de resoluções diferentes no merge sem re-encodar antes
+- Não adicionar script sem registrar em `__init__.py` + `start.bat` + `start.sh` (3 lugares)
+- Vault docs: wiki-links `related:` no frontmatter não são clicáveis — adicionar `## Related` com `[[...]]` no corpo
 
 ## Concepts
 
@@ -60,10 +67,15 @@ python-media-tools/
 | preset medium em vez de slow | 3-5x mais rápido, ~10% arquivo maior | 12-04-2026 |
 | x265-params pools em vez de -threads | -threads é ignorado pelo libx265 | 12-04-2026 |
 | obter_cores_encoder() = total-2 | Deixa 2 cores livres para uso paralelo | 12-04-2026 |
+| CortadorVideo em copy mode | Sem re-encode = instantâneo em 15GB, sem perda | 13-04-2026 |
+| AnalisadorMidia somente leitura | Inventário antes de decidir o que comprimir | 13-04-2026 |
+| ConversorFPS usa H.264 CRF 16 | Intermediate alta qualidade para H.265 posterior | 13-04-2026 |
 
 ## Next Steps
 
-- Pendente
+- Verificar se `saida/clips/` precisa ser criada automaticamente no setup (já cria via `criar_pastas`)
+- Considerar adicionar `--preset` arg ao `converter-fps.py` para preset H.265 direto (skip intermediate)
+- Redimensionamento de imagens em lote (`redimensionar-imagens.py`) — identificado como gap mas não implementado
 
 ## Blockers
 
