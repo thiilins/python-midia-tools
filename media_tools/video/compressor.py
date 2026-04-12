@@ -22,6 +22,9 @@ from ..common.resource_control import (
     aguardar_recursos_disponiveis,
     definir_prioridade_processo,
     pausar_entre_processamentos,
+    usar_aceleracao_hardware,
+    obter_cores_fisicos,
+    obter_cores_encoder,
 )
 from .corrector import CorretorVideo
 
@@ -47,7 +50,7 @@ class CompressorVideo:
         },
         "high_compression": {
             "crf": "30",
-            "preset": "slow",
+            "preset": "medium",
             "codec": "libx265",
             "descricao": "Alta compressão, boa qualidade",
             "max_resolution": None,
@@ -55,7 +58,7 @@ class CompressorVideo:
         },
         "maximum_compression": {
             "crf": "32",
-            "preset": "slow",
+            "preset": "medium",
             "codec": "libx265",
             "descricao": "Compressão máxima mantendo resolução original",
             "max_resolution": None,
@@ -63,7 +66,7 @@ class CompressorVideo:
         },
         "ultra_compression_1080p": {
             "crf": "32",
-            "preset": "slow",
+            "preset": "medium",
             "codec": "libx265",
             "descricao": "Compressão máxima reduzindo para 1080p",
             "max_resolution": "1920x1080",
@@ -71,7 +74,7 @@ class CompressorVideo:
         },
         "master_720p": {
             "crf": "23",
-            "preset": "slow",
+            "preset": "medium",
             "codec": "libx265",
             "descricao": "Perfil Master 720p — melhor equilíbrio qualidade/tamanho (padrão)",
             "max_resolution": "1280x720",
@@ -79,7 +82,7 @@ class CompressorVideo:
         },
         "ultra_compression_720p": {
             "crf": "32",
-            "preset": "slow",
+            "preset": "medium",
             "codec": "libx265",
             "descricao": "Compressão máxima reduzindo para 720p",
             "max_resolution": "1280x720",
@@ -87,13 +90,40 @@ class CompressorVideo:
         },
         "extreme_compression": {
             "crf": "35",
-            "preset": "veryslow",
+            "preset": "slow",
             "codec": "libx265",
             "descricao": "Compressão extrema (pode perder qualidade visível)",
             "max_resolution": None,
             "max_bitrate": "1.5M",
         },
+        "stream_720p": {
+            "crf": "28",
+            "preset": "medium",
+            "codec": "libx265",
+            "descricao": "Streams e gravações longas — 720p boa qualidade (recomendado para 15GB+)",
+            "max_resolution": "1280x720",
+            "max_bitrate": "1.5M",
+        },
+        "stream_540p": {
+            "crf": "28",
+            "preset": "medium",
+            "codec": "libx265",
+            "descricao": "Streams e gravações longas — 540p (meio-termo 720p/480p, ~35% menor que 720p)",
+            "max_resolution": "960x540",
+            "max_bitrate": "1M",
+        },
+        "stream_480p": {
+            "crf": "28",
+            "preset": "medium",
+            "codec": "libx265",
+            "descricao": "Streams e gravações longas — 480p arquivo mínimo",
+            "max_resolution": "854x480",
+            "max_bitrate": "800k",
+        },
     }
+
+    # Encoders GPU suportados para H.265 (em ordem de preferência)
+    GPU_ENCODERS = ["hevc_nvenc", "hevc_qsv", "hevc_amf", "hevc_videotoolbox"]
 
     def __init__(
         self,
@@ -130,11 +160,24 @@ class CompressorVideo:
             self.preset_nome = "balanced_compression"
 
         self.crf = preset_config["crf"]
-        self.preset = preset_config["preset"]
         self.codec = preset_config["codec"]
         self.max_resolution = preset_config.get("max_resolution")
         self.max_bitrate = preset_config.get("max_bitrate")
         self.corrigir_problemas = corrigir_problemas
+
+        # Permite sobrescrever o preset de velocidade via env var
+        # ENCODER_VELOCIDADE=rapido → faster | normal → medium | lento → slow
+        velocidade_map = {"rapido": "faster", "normal": "medium", "lento": "slow"}
+        env_velocidade = os.getenv("ENCODER_VELOCIDADE", "").lower()
+        if env_velocidade in velocidade_map:
+            self.preset = velocidade_map[env_velocidade]
+        else:
+            self.preset = preset_config["preset"]
+
+        # Detecção de encoder GPU (se USAR_GPU=1)
+        self.encoder_gpu = None
+        if usar_aceleracao_hardware():
+            self.encoder_gpu = self._detectar_encoder_gpu()
 
         # Instancia o corretor de vídeo
         self.corretor = CorretorVideo(
@@ -147,12 +190,14 @@ class CompressorVideo:
 
         # Configurações de controle de recursos
         self.threads = obter_configuracao_threads()
+        self.cores_fisicos = obter_cores_fisicos()
+        self.cores_encoder = obter_cores_encoder()  # cores dedicados ao x265
         self.limite_cpu = obter_configuracao_limite_cpu()
         self.limite_memoria = obter_configuracao_limite_memoria()
         self.pausa_entre_videos = obter_pausa_entre_videos()
 
-        # Define prioridade do processo
-        definir_prioridade_processo(nice=5)
+        # Define prioridade do processo (nice=0 = prioridade normal, usar CPU ao máximo)
+        definir_prioridade_processo(nice=0)
 
     @classmethod
     def listar_presets(cls) -> dict:
@@ -163,6 +208,29 @@ class CompressorVideo:
             dict: Dicionário com presets e suas descrições.
         """
         return cls.PRESETS
+
+    def _detectar_encoder_gpu(self) -> Optional[str]:
+        """
+        Detecta o primeiro encoder GPU disponível para H.265.
+
+        Returns:
+            str: Nome do encoder GPU (ex: 'hevc_nvenc'), ou None se não disponível.
+        """
+        try:
+            resultado = subprocess.run(
+                ["ffmpeg", "-encoders"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5,
+            )
+            output = resultado.stdout + resultado.stderr
+            for encoder in self.GPU_ENCODERS:
+                if encoder in output:
+                    return encoder
+        except Exception:
+            pass
+        return None
 
     def _obter_info_video(self, arquivo: Path) -> Dict:
         """
@@ -343,8 +411,40 @@ class CompressorVideo:
         # Calcula escala mantendo aspect ratio
         return f"scale='min({largura_max},iw)':min'({altura_max},ih)':force_original_aspect_ratio=decrease"
 
+    def _construir_comando_gpu(
+        self, encoder: str, crf: str, max_bitrate: Optional[str]
+    ) -> list:
+        """
+        Constrói os argumentos de codec para encoder GPU.
+
+        Args:
+            encoder: Nome do encoder GPU (ex: 'hevc_nvenc').
+            crf: Valor de qualidade CRF.
+            max_bitrate: Bitrate máximo ou None.
+
+        Returns:
+            list: Argumentos FFmpeg para o encoder GPU.
+        """
+        args = ["-c:v", encoder]
+        if encoder == "hevc_nvenc":
+            # p4 = preset balanceado velocidade/qualidade no NVENC
+            args += ["-preset", "p4", "-rc:v", "vbr", "-cq", crf, "-b:v", "0"]
+            if max_bitrate:
+                args += ["-maxrate", max_bitrate]
+        elif encoder == "hevc_qsv":
+            args += ["-preset", "medium", "-global_quality", crf]
+            if max_bitrate:
+                args += ["-maxrate", max_bitrate]
+        elif encoder == "hevc_amf":
+            args += ["-quality", "balanced", "-rc", "cqp", "-qp_i", crf, "-qp_p", crf]
+        elif encoder == "hevc_videotoolbox":
+            # VideoToolbox usa escala 0-100, mapear CRF 18-35 → qualidade ~85-40
+            qualidade = max(40, min(85, int(100 - (int(crf) - 18) * 2.5)))
+            args += ["-q:v", str(qualidade), "-allow_sw", "1"]
+        return args
+
     def _converter_video(
-        self, arquivo_entrada: Path, arquivo_saida: Path
+        self, arquivo_entrada: Path, arquivo_saida: Path, info_video: Optional[Dict] = None
     ) -> tuple[bool, Optional[str]]:
         """
         Converte o vídeo usando FFmpeg com H.265/HEVC.
@@ -352,12 +452,16 @@ class CompressorVideo:
         Args:
             arquivo_entrada: Caminho do arquivo de entrada.
             arquivo_saida: Caminho do arquivo de saída.
+            info_video: Informações do vídeo já obtidas (evita chamada ffprobe extra).
 
         Returns:
             Tuple[bool, Optional[str]]: (sucesso, mensagem_erro)
         """
-        duracao_total = self._obter_duracao_video(arquivo_entrada)
+        # Reutiliza info_video passado (evita ffprobe redundante)
+        if info_video is None:
+            info_video = self._obter_info_video(arquivo_entrada)
 
+        duracao_total = info_video.get("duracao") or 0
         if duracao_total == 0:
             duracao_total = 100  # Fallback
 
@@ -373,9 +477,6 @@ class CompressorVideo:
                 print(f"      ⚠️  Problemas com timestamps - será corrigido")
             if problemas["audio_desync"]:
                 print(f"      ⚠️  Possível dessincronia de áudio - será corrigido")
-
-        # Obtém informações do vídeo para verificar se precisa reduzir resolução
-        info_video = self._obter_info_video(arquivo_entrada)
 
         # Comando FFmpeg base
         comando = ["ffmpeg", "-y"]
@@ -404,21 +505,24 @@ class CompressorVideo:
             filtros_video.append(filtro_resolucao)
             print(f"   📐 Reduzindo resolução para: {self.max_resolution}")
 
-        # Configurações de codificação H.265
-        comando.extend([
-            "-c:v",
-            self.codec,
-            "-crf",
-            self.crf,
-            "-preset",
-            self.preset,
-            "-threads",
-            str(self.threads),
-        ])
-
-        # Adiciona bitrate máximo se especificado
-        if self.max_bitrate:
-            comando.extend(["-maxrate", self.max_bitrate, "-bufsize", "2M"])
+        # Configurações de codificação
+        if self.encoder_gpu:
+            # GPU: usa encoder AMF/NVENC/QSV
+            print(f"   ⚡ Usando GPU: {self.encoder_gpu}")
+            comando.extend(self._construir_comando_gpu(self.encoder_gpu, self.crf, self.max_bitrate))
+        else:
+            # CPU: libx265 com paralelismo máximo via x265-params
+            # pools=N diz ao x265 quantos threads usar (usa cores físicos, não lógicos)
+            # wpp=1 = wavefront parallel processing (padrão, deixa ligado)
+            x265_params = f"pools={self.cores_encoder}:wpp=1"
+            comando.extend([
+                "-c:v", "libx265",
+                "-crf", self.crf,
+                "-preset", self.preset,
+                "-x265-params", x265_params,
+            ])
+            if self.max_bitrate:
+                comando.extend(["-maxrate", self.max_bitrate, "-bufsize", "2M"])
 
         # Aplica filtros de vídeo se houver
         if filtros_video:
@@ -622,9 +726,10 @@ class CompressorVideo:
             print(f"   Resolução máxima: {self.max_resolution}")
         if self.max_bitrate:
             print(f"   Bitrate máximo: {self.max_bitrate}")
-        print(f"🔧 Controle de recursos:")
+        encoder_info = self.encoder_gpu if self.encoder_gpu else f"libx265 (pools={self.cores_encoder}/{self.cores_fisicos} cores)"
+        print(f"🔧 Encoder: {encoder_info} | Preset velocidade: {self.preset}")
         print(
-            f"   Threads: {self.threads} | Limite CPU: {self.limite_cpu:.0f}% | Limite Memória: {self.limite_memoria:.0f}%"
+            f"   Limite CPU: {self.limite_cpu:.0f}% | Limite Memória: {self.limite_memoria:.0f}%"
         )
         print("-" * 60)
 
@@ -659,7 +764,7 @@ class CompressorVideo:
                 else f"{tamanho_original:.2f}MB"
             )
 
-            sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino)
+            sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
 
             if sucesso and arquivo_destino.exists():
                 info_depois = self._obter_info_video(arquivo_destino)

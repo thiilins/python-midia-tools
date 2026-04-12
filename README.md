@@ -351,13 +351,17 @@ python gerador-thumbnails.py          # Gerar thumbnails
 **Vídeos:**
 
 ```bash
-# Compressor H.265 — 720p (padrão recomendado)
-python otimizador-compressor-video.py                         # Usa perfil Master 720p
-python otimizador-compressor-video.py --preset master_720p    # Mesmo que acima (explícito)
-python otimizador-compressor-video.py --preset ultra_compression_720p  # CRF 32 — arquivo mínimo
-python otimizador-compressor-video.py --preset ultra_compression_1080p # 1080p comprimido
+# Compressor H.265 (padrão recomendado)
+python otimizador-compressor-video.py                           # Perfil Master 720p (padrão)
+python otimizador-compressor-video.py --preset stream_720p      # Streams longas — 720p
+python otimizador-compressor-video.py --preset stream_540p      # Streams longas — 540p
+python otimizador-compressor-video.py --preset stream_480p      # Streams longas — 480p mínimo
+python otimizador-compressor-video.py --preset ultra_compression_720p  # CRF 32 agressivo 720p
 python otimizador-compressor-video.py --preset maximum_compression     # Sem reduzir resolução
 python otimizador-compressor-video.py --presets                        # Lista todos os perfis
+
+# Controle de CPU (não travar o PC durante uso paralelo)
+set FFMPEG_CPU_CORES=6 && python otimizador-compressor-video.py --preset stream_540p
 
 # Outros processamentos
 python otimizador-video.py            # Otimizar vídeos com H.264
@@ -389,7 +393,7 @@ Perfil padrão **Master 720p** — melhor equilíbrio qualidade/tamanho:
 | **Codec** | H.265 (libx265) | ~50% menor que H.264 mesma qualidade |
 | **Resolução** | 720p (1280×720) | Reduz apenas se o original for maior |
 | **CRF** | 23 | Sweet spot qualidade/compressão |
-| **Preset** | slow | Mais tempo = arquivo menor |
+| **Preset encoder** | medium | Equilíbrio velocidade/compressão |
 | **Áudio** | AAC 96kbps stereo | Eficiente para 720p |
 | **Saída** | sempre `.mp4` | Independente do formato de entrada |
 
@@ -398,15 +402,37 @@ Perfil padrão **Master 720p** — melhor equilíbrio qualidade/tamanho:
 
 Perfis disponíveis (use `--preset <nome>`):
 
-| Preset | CRF | Resolução | Indicado para |
-| :--- | :--- | :--- | :--- |
-| `master_720p` **(padrão)** | 23 | 720p | Qualidade + tamanho equilibrados |
-| `balanced_compression` | 28 | original | Compressão leve sem reduzir |
-| `high_compression` | 30 | original | Alta compressão, boa qualidade |
-| `maximum_compression` | 32 | original | Máxima compressão sem reduzir |
-| `ultra_compression_1080p` | 32 | 1080p | Arquivo mínimo em 1080p |
-| `ultra_compression_720p` | 32 | 720p | Arquivo mínimo em 720p |
-| `extreme_compression` | 35 | original | Extremo (perda visível) |
+| Preset | CRF | Resolução | Bitrate máx | Indicado para |
+| :--- | :--- | :--- | :--- | :--- |
+| `master_720p` **(padrão)** | 23 | 720p | — | Qualidade + tamanho equilibrados |
+| `stream_720p` | 28 | 720p | 1.5M | Streams e gravações longas (15GB+) |
+| `stream_540p` | 28 | 540p | 1M | Streams longas — 35% menor que 720p |
+| `stream_480p` | 28 | 480p | 800k | Streams longas — arquivo mínimo |
+| `balanced_compression` | 28 | original | — | Compressão leve sem reduzir |
+| `high_compression` | 30 | original | 3M | Alta compressão, boa qualidade |
+| `maximum_compression` | 32 | original | 2M | Máxima compressão sem reduzir |
+| `ultra_compression_1080p` | 32 | 1080p | 1.5M | Arquivo mínimo em 1080p |
+| `ultra_compression_720p` | 32 | 720p | 1M | Arquivo mínimo agressivo em 720p |
+| `extreme_compression` | 35 | original | 1.5M | Extremo (perda visível) |
+
+**Estimativa de saída para arquivos de 15GB (streams ~4-8h):**
+
+| Preset | Estimativa |
+| :--- | :--- |
+| `stream_720p` | ~800MB – 2GB |
+| `stream_540p` | ~500MB – 1.2GB |
+| `stream_480p` | ~300MB – 700MB |
+
+**Variáveis de ambiente para controle de recursos:**
+
+```bat
+set FFMPEG_CPU_CORES=8      # Cores físicos para o encoder x265 (padrão: total-2)
+set FFMPEG_THREADS=12       # Threads I/O do FFmpeg (padrão: 50% dos lógicos)
+set ENCODER_VELOCIDADE=rapido  # faster | normal (padrão) | lento
+set USAR_GPU=1              # Tenta GPU: AMD AMF / NVIDIA NVENC / Intel QSV
+set LIMITE_CPU=85           # Limite de uso de CPU em % (padrão: 85%)
+set LIMITE_MEMORIA=85       # Limite de uso de memória em % (padrão: 85%)
+```
 
 ### Otimizador de Vídeos (otimizador-video.py)
 

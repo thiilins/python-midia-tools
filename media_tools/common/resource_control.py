@@ -23,6 +23,21 @@ def obter_cores_disponiveis() -> int:
         return 1
 
 
+def obter_cores_fisicos() -> int:
+    """
+    Obtém o número de cores físicos (não lógicos/hyper-threading).
+    Importante para x265 que se beneficia de cores físicos, não threads HT.
+
+    Returns:
+        int: Número de cores físicos.
+    """
+    try:
+        fisicos = psutil.cpu_count(logical=False)
+        return fisicos if fisicos else (os.cpu_count() or 1)
+    except Exception:
+        return os.cpu_count() or 1
+
+
 def calcular_threads_seguros(cores_totais: int, percentual: float = 0.5) -> int:
     """
     Calcula número seguro de threads para usar.
@@ -157,11 +172,32 @@ def obter_configuracao_threads() -> int:
         except ValueError:
             pass
 
-    # Calcula valor seguro (50% dos cores, mínimo 2, máximo 8)
+    # Usa 50% dos cores lógicos para I/O e muxing — deixa metade livre para uso paralelo
+    # (x265 gerencia o próprio pool via FFMPEG_CPU_CORES separado)
     cores = obter_cores_disponiveis()
-    threads = calcular_threads_seguros(cores, 0.5)
-    # Limita a máximo 8 threads para evitar sobrecarga
-    return min(threads, 8)
+    return max(2, int(cores * 0.5))
+
+
+def obter_cores_encoder() -> int:
+    """
+    Obtém quantos cores físicos dar ao x265 para encoding.
+    Deixa pelo menos 2 cores físicos livres para o sistema e uso paralelo.
+
+    Controle via env var FFMPEG_CPU_CORES.
+
+    Returns:
+        int: Número de cores para o encoder x265.
+    """
+    env_cores = os.getenv("FFMPEG_CPU_CORES")
+    if env_cores:
+        try:
+            return max(1, int(env_cores))
+        except ValueError:
+            pass
+
+    fisicos = obter_cores_fisicos()
+    # Deixa 2 cores físicos livres; mínimo 2 para encoding
+    return max(2, fisicos - 2)
 
 
 def obter_configuracao_limite_cpu() -> float:
