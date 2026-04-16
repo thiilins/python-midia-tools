@@ -176,6 +176,10 @@ class CompressorVideo:
 
         # Detecção de encoder GPU (se USAR_GPU=1)
         self.encoder_gpu = None
+        # Índice do adaptador D3D11: 0=GPU dedicada (padrão para RX 9060 XT)
+        # Sobrescrever com GPU_DEVICE=N se necessário (usar ffmpeg -init_hw_device list para verificar)
+        env_device = os.getenv("GPU_DEVICE", "").strip()
+        self.gpu_device_idx = int(env_device) if env_device.isdigit() else 0
         if usar_aceleracao_hardware():
             self.encoder_gpu = self._detectar_encoder_gpu()
 
@@ -211,11 +215,23 @@ class CompressorVideo:
 
     def _detectar_encoder_gpu(self) -> Optional[str]:
         """
-        Detecta o primeiro encoder GPU disponível para H.265.
+        Detecta encoder GPU para H.265.
+        Respeita GPU_ENCODER env var para forçar um encoder específico.
 
         Returns:
-            str: Nome do encoder GPU (ex: 'hevc_nvenc'), ou None se não disponível.
+            str: Nome do encoder GPU (ex: 'hevc_amf'), ou None se não disponível.
         """
+        # Permite forçar encoder específico via env var (ex: GPU_ENCODER=hevc_amf)
+        encoder_forcado = os.getenv("GPU_ENCODER", "").strip().lower()
+        if encoder_forcado:
+            if encoder_forcado in self.GPU_ENCODERS:
+                return encoder_forcado
+            # Aceita atalhos: amd/amf → hevc_amf, nvidia/nvenc → hevc_nvenc, intel/qsv → hevc_qsv
+            aliases = {"amd": "hevc_amf", "amf": "hevc_amf", "nvidia": "hevc_nvenc",
+                       "nvenc": "hevc_nvenc", "intel": "hevc_qsv", "qsv": "hevc_qsv"}
+            if encoder_forcado in aliases:
+                return aliases[encoder_forcado]
+
         try:
             resultado = subprocess.run(
                 ["ffmpeg", "-encoders"],
@@ -408,8 +424,14 @@ class CompressorVideo:
         if largura_original <= largura_max and altura_original <= altura_max:
             return None
 
-        # Calcula escala mantendo aspect ratio
-        return f"scale='min({largura_max},iw)':min'({altura_max},ih)':force_original_aspect_ratio=decrease"
+        # Calcula escala mantendo aspect ratio + força dimensões pares (hevc_amf exige)
+        # trunc(x/2)*2 arredonda para baixo para o múltiplo de 2 mais próximo
+        return (
+            f"scale="
+            f"w='trunc(min({largura_max},iw)/2)*2':"
+            f"h='trunc(min({altura_max},ih)/2)*2':"
+            f"force_original_aspect_ratio=decrease"
+        )
 
     def _construir_comando_gpu(
         self, encoder: str, crf: str, max_bitrate: Optional[str]
@@ -436,7 +458,30 @@ class CompressorVideo:
             if max_bitrate:
                 args += ["-maxrate", max_bitrate]
         elif encoder == "hevc_amf":
-            args += ["-quality", "balanced", "-rc", "cqp", "-qp_i", crf, "-qp_p", crf]
+            # AMD AMF HEVC encoder
+            # qp_p e qp_b ligeiramente maiores que qp_i = melhor equilíbrio qualidade/tamanho
+            qp = int(crf)
+            if max_bitrate:
+                # VBR com cap de bitrate quando preset define max_bitrate
+                args += [
+                    "-rc", "vbr_peak",
+                    "-b:v", "0",
+                    "-maxrate", max_bitrate,
+                    "-qp_i", str(qp),
+                    "-qp_p", str(qp + 2),
+                    "-qp_b", str(qp + 4),
+                    "-quality", "quality",
+                ]
+            else:
+                # CQP (qualidade constante) — equivalente ao CRF do libx265
+                args += [
+                    "-rc", "cqp",
+                    "-qp_i", str(qp),
+                    "-qp_p", str(qp + 2),
+                    "-qp_b", str(qp + 4),
+                    "-quality", "quality",
+                    "-b:v", "0",
+                ]
         elif encoder == "hevc_videotoolbox":
             # VideoToolbox usa escala 0-100, mapear CRF 18-35 → qualidade ~85-40
             qualidade = max(40, min(85, int(100 - (int(crf) - 18) * 2.5)))
@@ -480,6 +525,18 @@ class CompressorVideo:
 
         # Comando FFmpeg base
         comando = ["ffmpeg", "-y"]
+
+        # Decode + encode no mesmo adaptador (força GPU dedicada, evita iGPU)
+        # -init_hw_device d3d11va=dx:N cria contexto no adaptador N (1 = dGPU dedicada)
+        # -hwaccel_device dx vincula decode a esse contexto
+        # hevc_amf herda automaticamente o mesmo contexto D3D11
+        if self.encoder_gpu and "amf" in self.encoder_gpu:
+            comando.extend([
+                "-init_hw_device", f"d3d11va=dx:{self.gpu_device_idx}",
+                "-init_hw_device", "amf=amf@dx",
+                "-hwaccel", "d3d11va",
+                "-hwaccel_device", "dx",
+            ])
 
         # Adiciona flags de correção de erros se necessário
         if aplicar_correcoes:
@@ -726,11 +783,13 @@ class CompressorVideo:
             print(f"   Resolução máxima: {self.max_resolution}")
         if self.max_bitrate:
             print(f"   Bitrate máximo: {self.max_bitrate}")
-        encoder_info = self.encoder_gpu if self.encoder_gpu else f"libx265 (pools={self.cores_encoder}/{self.cores_fisicos} cores)"
-        print(f"🔧 Encoder: {encoder_info} | Preset velocidade: {self.preset}")
-        print(
-            f"   Limite CPU: {self.limite_cpu:.0f}% | Limite Memória: {self.limite_memoria:.0f}%"
-        )
+        if self.encoder_gpu:
+            encoder_info = f"{self.encoder_gpu} (adapter {self.gpu_device_idx} — GPU dedicada)"
+        else:
+            encoder_info = f"libx265 (pools={self.cores_encoder}/{self.cores_fisicos} cores)"
+        print(f"🔧 Encoder: {encoder_info}")
+        if not self.encoder_gpu:
+            print(f"   Limite CPU: {self.limite_cpu:.0f}% | Limite Memória: {self.limite_memoria:.0f}%")
         print("-" * 60)
 
         sucessos = 0
@@ -739,8 +798,8 @@ class CompressorVideo:
 
         # Processamento sequencial
         for i, arquivo_origem in enumerate(arquivos, 1):
-            # Verifica recursos antes de processar
-            if not verificar_recursos_disponiveis(self.limite_cpu, self.limite_memoria):
+            # Verifica recursos antes de processar (apenas em modo CPU — GPU não tem esse gargalo)
+            if not self.encoder_gpu and not verificar_recursos_disponiveis(self.limite_cpu, self.limite_memoria):
                 print(
                     f"\n⏸️  Aguardando recursos disponíveis (CPU < {self.limite_cpu:.0f}%, Memória < {self.limite_memoria:.0f}%)..."
                 )
@@ -765,6 +824,20 @@ class CompressorVideo:
             )
 
             sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
+
+            # Fallback para CPU quando GPU falha (dimensões incomuns, VFR, etc.)
+            if not sucesso and self.encoder_gpu:
+                # Remove arquivo corrompido gerado pela tentativa falha
+                if arquivo_destino.exists():
+                    try:
+                        arquivo_destino.unlink()
+                    except OSError:
+                        pass
+                print(f"   🔄 GPU falhou, tentando CPU (libx265)...")
+                encoder_backup = self.encoder_gpu
+                self.encoder_gpu = None
+                sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
+                self.encoder_gpu = encoder_backup
 
             if sucesso and arquivo_destino.exists():
                 info_depois = self._obter_info_video(arquivo_destino)

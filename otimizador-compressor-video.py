@@ -44,15 +44,29 @@ def main():
         print("\nOu via variável de ambiente:")
         print("  set PRESET_VIDEO=stream_720p")
         print("  python otimizador-compressor-video.py")
-        print("\n🔧 Controle de Recursos (variáveis de ambiente):")
+        print("\n🔧 Flags de execução:")
+        print("  --amd                     # GPU AMD (hevc_amf + decode d3d11va) — RX 9060 XT")
+        print("  --nvidia                  # GPU NVIDIA (hevc_nvenc)")
+        print("  --gpu / -g                # GPU auto-detect (testa nvenc → qsv → amf)")
+        print("  --sem-correcoes           # Pula correção de VFR/timestamps (mais rápido)")
+        print("\n⚙️  Controle de Recursos (variáveis de ambiente):")
         print("  FFMPEG_CPU_CORES=8        # Cores físicos para o encoder x265 (padrão: total-2)")
         print("  FFMPEG_THREADS=12         # Threads I/O do FFmpeg (padrão: 50% dos lógicos)")
         print("  LIMITE_CPU=85             # Limite de uso de CPU em % (padrão: 85%)")
         print("  LIMITE_MEMORIA=85         # Limite de uso de memória em % (padrão: 85%)")
         print("  ENCODER_VELOCIDADE=rapido # faster/normal/lento (sobrescreve preset do encoder)")
-        print("  USAR_GPU=1                # Tenta usar GPU (AMD AMF / NVIDIA NVENC)")
+        print("  USAR_GPU=1                # Equivalente ao --gpu (env var)")
+        print("\n💡 Com GPU AMD RX 9060 XT:")
+        print("  python otimizador-compressor-video.py --amd                               # hevc_amf 5-10x mais rápido")
+        print("  python otimizador-compressor-video.py --amd --preset stream_720p")
+        print("  set GPU_ENCODER=amf && python otimizador-compressor-video.py  # via env")
         print("\n⚠️  IMPORTANTE: H.265 é ~50% mais lento que H.264, mas comprime muito mais!")
         sys.exit(0)
+
+    # Padrão: GPU AMD (hevc_amf + d3d11va)
+    if not os.getenv("USAR_GPU"):
+        os.environ["USAR_GPU"] = "1"
+        os.environ.setdefault("GPU_ENCODER", "hevc_amf")
 
     # Verifica preset via variável de ambiente ou argumento
     preset_nome = os.getenv("PRESET_VIDEO", None)
@@ -64,11 +78,31 @@ def main():
         corrigir_problemas = False
 
     # Processa argumentos
-    if len(sys.argv) > 1:
-        if sys.argv[1] in ["--preset", "-P"] and len(sys.argv) > 2:
-            preset_nome = sys.argv[2]
-        elif sys.argv[1] in ["--sem-correcoes", "--no-fix", "--no-correcoes"]:
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        if args[i] in ["--preset", "-P"] and i + 1 < len(args):
+            preset_nome = args[i + 1]
+            i += 2
+        elif args[i] in ["--sem-correcoes", "--no-fix", "--no-correcoes"]:
             corrigir_problemas = False
+            i += 1
+        elif args[i] in ["--gpu", "-g"]:
+            os.environ["USAR_GPU"] = "1"
+            i += 1
+        elif args[i] in ["--amd"]:
+            os.environ["USAR_GPU"] = "1"
+            os.environ["GPU_ENCODER"] = "hevc_amf"
+            i += 1
+        elif args[i] in ["--nvidia"]:
+            os.environ["USAR_GPU"] = "1"
+            os.environ["GPU_ENCODER"] = "hevc_nvenc"
+            i += 1
+        elif args[i] in ["--gpu-device"] and i + 1 < len(args):
+            os.environ["GPU_DEVICE"] = args[i + 1]
+            i += 2
+        else:
+            i += 1
 
     try:
         # Se preset_nome foi fornecido, usa preset; senão usa padrão
