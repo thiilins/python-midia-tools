@@ -796,6 +796,8 @@ class CompressorVideo:
         sucessos = 0
         falhas = 0
         pulados = 0
+        total_original_mb = 0.0
+        total_novo_mb = 0.0
 
         # Processamento sequencial
         for i, arquivo_origem in enumerate(arquivos, 1):
@@ -844,6 +846,8 @@ class CompressorVideo:
                 info_depois = self._obter_info_video(arquivo_destino)
                 tamanho_novo = arquivo_destino.stat().st_size / (1024 * 1024)
                 reducao = 100 - (tamanho_novo / tamanho_original * 100)
+                total_original_mb += tamanho_original
+                total_novo_mb += tamanho_novo
 
                 print(f"   ✅ Finalizado.")
                 print(
@@ -881,5 +885,14 @@ class CompressorVideo:
         print("\n" + "=" * 60)
         print(f"✅ Compressão concluída!")
         print(f"   Sucessos: {sucessos} | Falhas: {falhas} | Pulados: {pulados}")
+        if total_original_mb > 0:
+            economizado_mb = total_original_mb - total_novo_mb
+            reducao_total = 100 - (total_novo_mb / total_original_mb * 100)
+            def fmt(mb):
+                return f"{mb / 1024:.2f}GB" if mb >= 1024 else f"{mb:.0f}MB"
+            print(f"   💾 Total original:  {fmt(total_original_mb)}")
+            print(f"   💾 Total comprimido: {fmt(total_novo_mb)}")
+            print(f"   🎉 Economizado:      {fmt(economizado_mb)} ({reducao_total:.1f}% menor)")
 
-        return {"sucessos": sucessos, "falhas": falhas, "pulados": pulados}
+        return {"sucessos": sucessos, "falhas": falhas, "pulados": pulados,
+                "economizado_mb": round(total_original_mb - total_novo_mb, 2)}
