@@ -531,11 +531,11 @@ class CompressorVideo:
         # -hwaccel_device dx vincula decode a esse contexto
         # hevc_amf herda automaticamente o mesmo contexto D3D11
         if self.encoder_gpu and "amf" in self.encoder_gpu:
+            # Cria contexto AMF no adaptador correto (GPU dedicada)
+            # Decode fica no CPU para evitar conflito de formato com filtros de escala
             comando.extend([
                 "-init_hw_device", f"d3d11va=dx:{self.gpu_device_idx}",
                 "-init_hw_device", "amf=amf@dx",
-                "-hwaccel", "d3d11va",
-                "-hwaccel_device", "dx",
             ])
 
         # Adiciona flags de correção de erros se necessário
