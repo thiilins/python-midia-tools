@@ -424,13 +424,14 @@ class CompressorVideo:
         if largura_original <= largura_max and altura_original <= altura_max:
             return None
 
-        # Calcula escala mantendo aspect ratio + força dimensões pares (hevc_amf exige)
-        # trunc(x/2)*2 arredonda para baixo para o múltiplo de 2 mais próximo
+        # Dois passes:
+        # 1) scale com aspect ratio mantido dentro do limite
+        # 2) trunc garante dimensões pares na saída real (force_original_aspect_ratio
+        #    pode gerar largura ímpar, ex: 720x1280 → 405x720 → quebra hevc_amf e libx265)
         return (
-            f"scale="
-            f"w='trunc(min({largura_max},iw)/2)*2':"
-            f"h='trunc(min({altura_max},ih)/2)*2':"
-            f"force_original_aspect_ratio=decrease"
+            f"scale='min({largura_max},iw)':'min({altura_max},ih)'"
+            f":force_original_aspect_ratio=decrease"
+            f",scale=trunc(iw/2)*2:trunc(ih/2)*2"
         )
 
     def _construir_comando_gpu(
@@ -868,6 +869,12 @@ class CompressorVideo:
                 if i < len(arquivos):
                     pausar_entre_processamentos(self.pausa_entre_videos)
             else:
+                # Remove arquivo corrompido/incompleto gerado pela falha
+                if arquivo_destino.exists():
+                    try:
+                        arquivo_destino.unlink()
+                    except OSError:
+                        pass
                 print(f"   ❌ Erro: {erro}")
                 falhas += 1
 
