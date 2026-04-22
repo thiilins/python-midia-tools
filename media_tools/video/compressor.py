@@ -262,10 +262,8 @@ class CompressorVideo:
             "ffprobe",
             "-v",
             "error",
-            "-select_streams",
-            "v:0",
             "-show_entries",
-            "stream=codec_name,width,height,bit_rate,r_frame_rate",
+            "stream=codec_name,codec_type,width,height,bit_rate,r_frame_rate",
             "-show_entries",
             "format=duration,bit_rate,size",
             "-of",
@@ -286,6 +284,7 @@ class CompressorVideo:
 
             info = {
                 "codec": None,
+                "audio_codec": None,
                 "width": None,
                 "height": None,
                 "bitrate_video": None,
@@ -295,22 +294,28 @@ class CompressorVideo:
                 "tamanho": None,
             }
 
-            # Extrai informações do stream de vídeo
-            if "streams" in data and len(data["streams"]) > 0:
-                stream = data["streams"][0]
-                info["codec"] = stream.get("codec_name", "unknown")
-                info["width"] = stream.get("width", 0)
-                info["height"] = stream.get("height", 0)
-                info["bitrate_video"] = stream.get("bit_rate")
+            # Separa streams por tipo
+            streams = data.get("streams", [])
+            video_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
+            audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), None)
+
+            if video_stream:
+                info["codec"] = video_stream.get("codec_name", "unknown")
+                info["width"] = video_stream.get("width", 0)
+                info["height"] = video_stream.get("height", 0)
+                info["bitrate_video"] = video_stream.get("bit_rate")
                 if info["bitrate_video"]:
                     info["bitrate_video"] = int(info["bitrate_video"]) / 1000  # kbps
 
                 # Calcula FPS
-                r_frame_rate = stream.get("r_frame_rate", "")
+                r_frame_rate = video_stream.get("r_frame_rate", "")
                 if r_frame_rate and "/" in r_frame_rate:
                     num, den = map(int, r_frame_rate.split("/"))
                     if den > 0:
                         info["fps"] = round(num / den, 2)
+
+            if audio_stream:
+                info["audio_codec"] = audio_stream.get("codec_name")
 
             # Extrai informações do formato
             if "format" in data:
@@ -325,6 +330,7 @@ class CompressorVideo:
         except Exception as e:
             return {
                 "codec": "unknown",
+                "audio_codec": None,
                 "width": 0,
                 "height": 0,
                 "bitrate_video": None,
@@ -420,14 +426,15 @@ class CompressorVideo:
         # Parse resolução máxima
         largura_max, altura_max = map(int, self.max_resolution.split("x"))
 
+        # Portrait: troca as bounds para que "720p" signifique 720 no lado curto
+        # Ex: preset 1280x720 → portrait usa 720x1280 (não 404x720)
+        if altura_original > largura_original:
+            largura_max, altura_max = altura_max, largura_max
+
         # Se o vídeo já está dentro do limite, não reduz
         if largura_original <= largura_max and altura_original <= altura_max:
             return None
 
-        # Dois passes:
-        # 1) scale com aspect ratio mantido dentro do limite
-        # 2) trunc garante dimensões pares na saída real (force_original_aspect_ratio
-        #    pode gerar largura ímpar, ex: 720x1280 → 405x720 → quebra hevc_amf e libx265)
         return (
             f"scale='min({largura_max},iw)':'min({altura_max},ih)'"
             f":force_original_aspect_ratio=decrease"
@@ -459,30 +466,18 @@ class CompressorVideo:
             if max_bitrate:
                 args += ["-maxrate", max_bitrate]
         elif encoder == "hevc_amf":
-            # AMD AMF HEVC encoder
-            # qp_p e qp_b ligeiramente maiores que qp_i = melhor equilíbrio qualidade/tamanho
             qp = int(crf)
+            base = [
+                "-qp_i", str(qp),
+                "-qp_p", str(qp + 2),
+                "-qp_b", str(qp + 4),
+                "-quality", "balanced",  # ~30-40% mais rápido que "quality", diferença visual mínima
+                "-bf", "2",              # B-frames: melhor compressão por frame
+            ]
             if max_bitrate:
-                # VBR com cap de bitrate quando preset define max_bitrate
-                args += [
-                    "-rc", "vbr_peak",
-                    "-b:v", "0",
-                    "-maxrate", max_bitrate,
-                    "-qp_i", str(qp),
-                    "-qp_p", str(qp + 2),
-                    "-qp_b", str(qp + 4),
-                    "-quality", "quality",
-                ]
+                args += ["-rc", "vbr_peak", "-b:v", "0", "-maxrate", max_bitrate] + base
             else:
-                # CQP (qualidade constante) — equivalente ao CRF do libx265
-                args += [
-                    "-rc", "cqp",
-                    "-qp_i", str(qp),
-                    "-qp_p", str(qp + 2),
-                    "-qp_b", str(qp + 4),
-                    "-quality", "quality",
-                    "-b:v", "0",
-                ]
+                args += ["-rc", "cqp", "-b:v", "0"] + base
         elif encoder == "hevc_videotoolbox":
             # VideoToolbox usa escala 0-100, mapear CRF 18-35 → qualidade ~85-40
             qualidade = max(40, min(85, int(100 - (int(crf) - 18) * 2.5)))
@@ -588,11 +583,15 @@ class CompressorVideo:
 
         # Configurações de áudio
         filtro_audio = "aresample=async=1" if aplicar_correcoes else None
+        audio_codec_original = info_video.get("audio_codec", "")
 
-        comando.extend(["-c:a", "aac", "-b:a", "96k", "-ac", "2"])  # stereo
-
-        if filtro_audio:
-            comando.extend(["-af", filtro_audio])
+        if not aplicar_correcoes and audio_codec_original in ("aac", "mp3", "opus"):
+            # Copia áudio sem re-encodar — elimina processamento de áudio completamente
+            comando.extend(["-c:a", "copy"])
+        else:
+            comando.extend(["-c:a", "aac", "-b:a", "96k", "-ac", "2"])
+            if filtro_audio:
+                comando.extend(["-af", filtro_audio])
 
         # Flags adicionais
         comando.extend(["-movflags", "+faststart", "-pix_fmt", "yuv420p"])
@@ -766,11 +765,10 @@ class CompressorVideo:
         pasta_entrada = Path(self.pasta_entrada).resolve()
         pasta_saida = Path(self.pasta_saida).resolve()
 
-        arquivos = [
-            f
-            for f in pasta_entrada.iterdir()
-            if f.is_file() and f.suffix.lower() in self.EXTENSOES_VALIDAS
-        ]
+        arquivos = sorted(
+            (f for f in pasta_entrada.iterdir() if f.is_file() and f.suffix.lower() in self.EXTENSOES_VALIDAS),
+            key=lambda f: f.stat().st_size,
+        )
 
         if not arquivos:
             print("ℹ️  Nenhum vídeo encontrado.")

@@ -151,68 +151,45 @@ class ConversorWebM:
 
     def _detectar_problemas(self, arquivo: Path) -> dict:
         """
-        Detecta problemas no vídeo WebM (VFR, timestamps, áudio).
-
-        Args:
-            arquivo: Caminho do arquivo WebM.
-
-        Returns:
-            dict: Problemas detectados.
+        Detecta problemas no vídeo WebM (VFR, timestamps, áudio) em 1 chamada ffprobe.
         """
-        problemas = {
-            "vfr": False,  # Variable Frame Rate
-            "timestamps": False,
-            "audio_desync": False,
-        }
+        problemas = {"vfr": False, "timestamps": False, "audio_desync": False}
 
         if not self.detectar_problemas or shutil.which("ffprobe") is None:
             return problemas
 
         try:
-            # Verifica frame rate variável
             cmd = [
-                "ffprobe",
-                "-v",
-                "error",
-                "-select_streams",
-                "v:0",
-                "-show_entries",
-                "stream=r_frame_rate",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
+                "ffprobe", "-v", "error",
+                "-show_entries", "stream=codec_type,codec_name,r_frame_rate",
+                "-of", "json",
                 str(arquivo),
             ]
             resultado = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            if resultado.returncode == 0:
-                # Se não conseguir determinar FPS fixo, pode ser VFR
-                fps_str = resultado.stdout.strip()
+            if resultado.returncode != 0:
+                return problemas
+
+            import json as _json
+            data = _json.loads(resultado.stdout)
+            streams = data.get("streams", [])
+
+            video = next((s for s in streams if s.get("codec_type") == "video"), None)
+            audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
+
+            if video:
+                fps_str = video.get("r_frame_rate", "")
                 if fps_str and "/" in fps_str:
                     num, den = map(int, fps_str.split("/"))
                     if den > 0:
                         fps = num / den
-                        # FPS muito variável ou não inteiro pode indicar VFR
                         if fps < 10 or fps > 120 or fps != int(fps):
                             problemas["vfr"] = True
 
-            # Verifica se há stream de áudio
-            cmd_audio = [
-                "ffprobe",
-                "-v",
-                "error",
-                "-select_streams",
-                "a:0",
-                "-show_entries",
-                "stream=codec_name",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(arquivo),
-            ]
-            resultado_audio = subprocess.run(
-                cmd_audio, capture_output=True, text=True, timeout=10
-            )
-            if resultado_audio.returncode != 0:
-                # Sem áudio pode causar problemas de sincronia
+            if audio is None:
                 problemas["audio_desync"] = True
+
+            if problemas["vfr"] or problemas["audio_desync"]:
+                problemas["timestamps"] = True
 
         except Exception:
             pass

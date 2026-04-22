@@ -75,122 +75,69 @@ class CorretorVideo:
 
     def _obter_info_video(self, arquivo: Path) -> Dict:
         """
-        Obtém informações detalhadas do vídeo usando ffprobe.
-
-        Args:
-            arquivo: Caminho do arquivo de vídeo.
-
-        Returns:
-            dict: Informações do vídeo (codec, resolução, bitrate, duração, fps, etc.)
+        Obtém informações completas do vídeo em 1 chamada ffprobe.
+        Inclui codec de áudio e fps raw para derivar detecção de problemas sem chamadas extras.
         """
         comando = [
-            "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=codec_name,width,height,bit_rate,r_frame_rate",
-            "-show_entries",
-            "format=duration,bit_rate,size",
-            "-of",
-            "json",
+            "ffprobe", "-v", "error",
+            "-show_entries", "stream=codec_name,codec_type,width,height,bit_rate,r_frame_rate",
+            "-show_entries", "format=duration,bit_rate,size",
+            "-of", "json",
             str(arquivo),
         ]
 
         try:
             resultado = subprocess.run(
-                comando,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                check=True,
-                timeout=10,
+                comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, check=True, timeout=10,
             )
             data = json.loads(resultado.stdout)
 
             info = {
-                "codec": None,
-                "width": None,
-                "height": None,
-                "bitrate_video": None,
-                "bitrate_total": None,
-                "fps": None,
-                "duracao": None,
-                "tamanho": None,
+                "codec": None, "audio_codec": None,
+                "width": None, "height": None,
+                "bitrate_video": None, "bitrate_total": None,
+                "fps": None, "fps_raw": None,
+                "duracao": None, "tamanho": None,
             }
 
-            # Extrai informações do stream de vídeo
-            if "streams" in data and len(data["streams"]) > 0:
-                stream = data["streams"][0]
-                info["codec"] = stream.get("codec_name", "unknown")
-                info["width"] = stream.get("width", 0)
-                info["height"] = stream.get("height", 0)
-                info["bitrate_video"] = stream.get("bit_rate")
-                if info["bitrate_video"]:
-                    info["bitrate_video"] = int(info["bitrate_video"]) / 1000  # kbps
+            streams = data.get("streams", [])
+            video = next((s for s in streams if s.get("codec_type") == "video"), None)
+            audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
 
-                # Calcula FPS
-                r_frame_rate = stream.get("r_frame_rate", "")
-                if r_frame_rate and "/" in r_frame_rate:
-                    num, den = map(int, r_frame_rate.split("/"))
+            if video:
+                info["codec"] = video.get("codec_name", "unknown")
+                info["width"] = video.get("width", 0)
+                info["height"] = video.get("height", 0)
+                info["bitrate_video"] = video.get("bit_rate")
+                if info["bitrate_video"]:
+                    info["bitrate_video"] = int(info["bitrate_video"]) / 1000
+                r = video.get("r_frame_rate", "")
+                info["fps_raw"] = r
+                if r and "/" in r:
+                    num, den = map(int, r.split("/"))
                     if den > 0:
                         info["fps"] = round(num / den, 2)
 
-            # Extrai informações do formato
+            info["audio_codec"] = audio.get("codec_name") if audio else None
+
             if "format" in data:
-                format_info = data["format"]
-                info["duracao"] = float(format_info.get("duration", 0))
-                info["bitrate_total"] = format_info.get("bit_rate")
+                fmt = data["format"]
+                info["duracao"] = float(fmt.get("duration", 0))
+                info["bitrate_total"] = fmt.get("bit_rate")
                 if info["bitrate_total"]:
-                    info["bitrate_total"] = int(info["bitrate_total"]) / 1000  # kbps
-                info["tamanho"] = int(format_info.get("size", 0))
+                    info["bitrate_total"] = int(info["bitrate_total"]) / 1000
+                info["tamanho"] = int(fmt.get("size", 0))
 
             return info
         except Exception:
             return {
-                "codec": "unknown",
-                "width": 0,
-                "height": 0,
-                "bitrate_video": None,
-                "bitrate_total": None,
-                "fps": None,
-                "duracao": 0,
-                "tamanho": 0,
+                "codec": "unknown", "audio_codec": None,
+                "width": 0, "height": 0,
+                "bitrate_video": None, "bitrate_total": None,
+                "fps": None, "fps_raw": None,
+                "duracao": 0, "tamanho": 0,
             }
-
-    def _obter_duracao_video(self, arquivo: Path) -> float:
-        """
-        Obtém a duração do vídeo em segundos usando ffprobe.
-
-        Args:
-            arquivo: Caminho do arquivo de vídeo.
-
-        Returns:
-            float: Duração em segundos, ou 0.0 se não conseguir obter.
-        """
-        comando = [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(arquivo),
-        ]
-        try:
-            resultado = subprocess.run(
-                comando,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                check=True,
-                timeout=10,
-            )
-            return float(resultado.stdout.strip())
-        except (subprocess.CalledProcessError, ValueError):
-            return 0.0
 
     def _converter_tempo_para_segundos(self, tempo_str: str) -> float:
         """
@@ -208,105 +155,46 @@ class CorretorVideo:
         except ValueError:
             return 0.0
 
-    def detectar_problemas(self, arquivo: Path) -> Dict:
+    def detectar_problemas(self, arquivo: Path, info: Dict = None) -> Dict:
         """
         Detecta problemas no vídeo (VFR, timestamps, áudio).
-
-        Args:
-            arquivo: Caminho do arquivo de vídeo.
-
-        Returns:
-            dict: Problemas detectados com chaves:
-                - vfr: bool - Variable Frame Rate detectado
-                - timestamps: bool - Problemas com timestamps
-                - audio_desync: bool - Dessincronia de áudio detectada
+        Se `info` for fornecido (resultado de _obter_info_video), deriva sem ffprobe extra.
         """
-        problemas = {
-            "vfr": False,  # Variable Frame Rate
-            "timestamps": False,
-            "audio_desync": False,
-        }
+        problemas = {"vfr": False, "timestamps": False, "audio_desync": False}
 
-        if shutil.which("ffprobe") is None:
-            return problemas
+        if info is None:
+            if shutil.which("ffprobe") is None:
+                return problemas
+            info = self._obter_info_video(arquivo)
 
-        try:
-            # Verifica frame rate variável
-            cmd = [
-                "ffprobe",
-                "-v",
-                "error",
-                "-select_streams",
-                "v:0",
-                "-show_entries",
-                "stream=r_frame_rate",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(arquivo),
-            ]
-            resultado = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            if resultado.returncode == 0:
-                fps_str = resultado.stdout.strip()
-                if fps_str and "/" in fps_str:
-                    num, den = map(int, fps_str.split("/"))
-                    if den > 0:
-                        fps = num / den
-                        # FPS muito variável ou não inteiro pode indicar VFR
-                        # Também verifica se está fora de faixas comuns
-                        if fps < 10 or fps > 120 or fps != int(fps):
-                            problemas["vfr"] = True
+        fps = info.get("fps")
+        if fps is not None:
+            if fps < 10 or fps > 120 or fps != int(fps):
+                problemas["vfr"] = True
 
-            # Verifica se há stream de áudio e se está sincronizado
-            cmd_audio = [
-                "ffprobe",
-                "-v",
-                "error",
-                "-select_streams",
-                "a:0",
-                "-show_entries",
-                "stream=codec_name",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(arquivo),
-            ]
-            resultado_audio = subprocess.run(
-                cmd_audio, capture_output=True, text=True, timeout=10
-            )
-            if resultado_audio.returncode != 0:
-                # Sem áudio pode causar problemas de sincronia
-                problemas["audio_desync"] = True
+        if info.get("audio_codec") is None:
+            problemas["audio_desync"] = True
 
-            # Timestamps: verifica se há problemas com PTS
-            # Se o vídeo tem problemas de timestamps, geralmente aparece em erros do FFmpeg
-            # Aqui assumimos que se VFR ou audio_desync, pode ter problemas de timestamps
-            if problemas["vfr"] or problemas["audio_desync"]:
-                problemas["timestamps"] = True
-
-        except Exception:
-            pass
+        if problemas["vfr"] or problemas["audio_desync"]:
+            problemas["timestamps"] = True
 
         return problemas
 
     def corrigir_video(
-        self, arquivo_entrada: Path, arquivo_saida: Path
+        self, arquivo_entrada: Path, arquivo_saida: Path,
+        info: Dict = None, problemas: Dict = None,
     ) -> Tuple[bool, Optional[str]]:
         """
         Corrige problemas no vídeo usando FFmpeg com barra de progresso.
-
-        Args:
-            arquivo_entrada: Caminho do arquivo de entrada.
-            arquivo_saida: Caminho do arquivo de saída.
-
-        Returns:
-            Tuple[bool, Optional[str]]: (sucesso, mensagem_erro)
+        Aceita `info` e `problemas` pré-calculados para evitar ffprobe redundante.
         """
-        duracao_total = self._obter_duracao_video(arquivo_entrada)
+        if info is None:
+            info = self._obter_info_video(arquivo_entrada)
 
-        if duracao_total == 0:
-            duracao_total = 100  # Fallback
+        duracao_total = info.get("duracao") or 100
 
-        # Detecta problemas
-        problemas = self.detectar_problemas(arquivo_entrada)
+        if problemas is None:
+            problemas = self.detectar_problemas(arquivo_entrada, info)
 
         # Determina quais correções aplicar baseado nas configurações
         aplicar_vfr = self.corrigir_vfr and problemas["vfr"]
@@ -354,11 +242,8 @@ class CorretorVideo:
         precisa_reencodar_video = False
 
         if aplicar_vfr:
-            # VFR requer re-encodar para aplicar filtro fps
             precisa_reencodar_video = True
-            # Força FPS constante baseado no FPS detectado ou usa 30fps padrão
-            info_video = self._obter_info_video(arquivo_entrada)
-            fps_alvo = info_video.get("fps", 30)
+            fps_alvo = info.get("fps", 30)
             if fps_alvo and fps_alvo > 0:
                 fps_alvo = round(fps_alvo)
             else:
@@ -650,11 +535,9 @@ class CorretorVideo:
 
             arquivo_destino = pasta_saida / arquivo_origem.name
 
-            # Obtém informações antes
+            # 1 ffprobe cobre info + detecção de problemas
             info_antes = self._obter_info_video(arquivo_origem)
-
-            # Detecta problemas
-            problemas = self.detectar_problemas(arquivo_origem)
+            problemas = self.detectar_problemas(arquivo_origem, info_antes)
 
             # Verifica se há problemas para corrigir
             tem_problemas = False
@@ -690,7 +573,7 @@ class CorretorVideo:
                 else "N/A"
             )
 
-            sucesso, erro = self.corrigir_video(arquivo_origem, arquivo_destino)
+            sucesso, erro = self.corrigir_video(arquivo_origem, arquivo_destino, info_antes, problemas)
 
             if sucesso and arquivo_destino.exists():
                 info_depois = self._obter_info_video(arquivo_destino)

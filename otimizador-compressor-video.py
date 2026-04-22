@@ -48,7 +48,8 @@ def main():
         print("  --amd                     # GPU AMD (hevc_amf + decode d3d11va) — RX 9060 XT")
         print("  --nvidia                  # GPU NVIDIA (hevc_nvenc)")
         print("  --gpu / -g                # GPU auto-detect (testa nvenc → qsv → amf)")
-        print("  --sem-correcoes           # Pula correção de VFR/timestamps (mais rápido)")
+        print("  --sem-correcoes           # Pula correção de VFR/timestamps (mais rápido)
+  --delete / -d             # Apaga originais após conversão bem-sucedida")
         print("\n⚙️  Controle de Recursos (variáveis de ambiente):")
         print("  FFMPEG_CPU_CORES=8        # Cores físicos para o encoder x265 (padrão: total-2)")
         print("  FFMPEG_THREADS=12         # Threads I/O do FFmpeg (padrão: 50% dos lógicos)")
@@ -78,6 +79,7 @@ def main():
         corrigir_problemas = False
 
     # Processa argumentos
+    deletar_originais = False
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -86,6 +88,9 @@ def main():
             i += 2
         elif args[i] in ["--sem-correcoes", "--no-fix", "--no-correcoes"]:
             corrigir_problemas = False
+            i += 1
+        elif args[i] in ["--delete", "--apagar", "-d"]:
+            deletar_originais = True
             i += 1
         elif args[i] in ["--gpu", "-g"]:
             os.environ["USAR_GPU"] = "1"
@@ -105,18 +110,16 @@ def main():
             i += 1
 
     try:
-        # Se preset_nome foi fornecido, usa preset; senão usa padrão
         if preset_nome:
             compressor = CompressorVideo(
                 preset_nome=preset_nome, corrigir_problemas=corrigir_problemas
             )
         else:
-            # Padrão: master_720p
             compressor = CompressorVideo(
                 preset_nome="master_720p", corrigir_problemas=corrigir_problemas
             )
 
-        compressor.processar(deletar_originais=False)
+        compressor.processar(deletar_originais=deletar_originais)
     except KeyboardInterrupt:
         print("\n\n⚠️  Processo interrompido pelo usuário (Ctrl+C)")
         sys.exit(130)

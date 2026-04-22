@@ -420,15 +420,18 @@ python detector-duplicatas-videos.py  # Detectar vídeos duplicados
 
 ### Compressor de Vídeos (otimizador-compressor-video.py)
 
-Perfil padrão **Master 720p** — melhor equilíbrio qualidade/tamanho:
+Perfil padrão **Master 720p** com GPU AMD (hevc_amf) como encoder padrão:
 
 | Parâmetro | Valor | Motivo |
 | :--- | :--- | :--- |
-| **Codec** | H.265 (libx265) | ~50% menor que H.264 mesma qualidade |
-| **Resolução** | 720p (1280×720) | Reduz apenas se o original for maior |
+| **Encoder padrão** | hevc_amf (GPU AMD) | 5-10x mais rápido que CPU |
+| **Codec saída** | H.265/HEVC | ~50% menor que H.264 mesma qualidade |
+| **Resolução** | 720p (1280×720 landscape / 720×1280 portrait) | Preserva orientação corretamente |
 | **CRF** | 23 | Sweet spot qualidade/compressão |
-| **Preset encoder** | medium | Equilíbrio velocidade/compressão |
-| **Áudio** | AAC 96kbps stereo | Eficiente para 720p |
+| **Qualidade AMF** | balanced | ~30-40% mais rápido que `quality`, diferença mínima |
+| **B-frames** | 2 | Melhor compressão por frame |
+| **Áudio** | copy (se AAC/MP3/Opus) ou AAC 96kbps | Evita re-encode quando possível |
+| **Fila** | menor → maior | Feedback rápido nos arquivos pequenos |
 | **Saída** | sempre `.mp4` | Independente do formato de entrada |
 
 **Pasta de entrada**: `entrada/videos/`
@@ -457,6 +460,17 @@ Perfis disponíveis (use `--preset <nome>`):
 | `stream_540p` | ~500MB – 1.2GB |
 | `stream_480p` | ~300MB – 700MB |
 
+**Flags de GPU:**
+
+```bash
+python otimizador-compressor-video.py              # AMD hevc_amf (padrão)
+python otimizador-compressor-video.py --amd        # força AMD hevc_amf
+python otimizador-compressor-video.py --nvidia     # força NVIDIA hevc_nvenc
+python otimizador-compressor-video.py --gpu        # auto-detect (nvenc → qsv → amf)
+python otimizador-compressor-video.py --gpu-device 1  # adaptador D3D11 específico
+python otimizador-compressor-video.py --delete     # apaga originais após conversão bem-sucedida
+```
+
 **Variáveis de ambiente para controle de recursos:**
 
 ```bat
@@ -464,6 +478,8 @@ set FFMPEG_CPU_CORES=8      # Cores físicos para o encoder x265 (padrão: total
 set FFMPEG_THREADS=12       # Threads I/O do FFmpeg (padrão: 50% dos lógicos)
 set ENCODER_VELOCIDADE=rapido  # faster | normal (padrão) | lento
 set USAR_GPU=1              # Tenta GPU: AMD AMF / NVIDIA NVENC / Intel QSV
+set GPU_ENCODER=hevc_amf    # Força encoder específico (hevc_amf | hevc_nvenc | hevc_qsv)
+set GPU_DEVICE=0            # Adaptador D3D11 (0 = primeiro, útil em multi-GPU)
 set LIMITE_CPU=85           # Limite de uso de CPU em % (padrão: 85%)
 set LIMITE_MEMORIA=85       # Limite de uso de memória em % (padrão: 85%)
 ```
