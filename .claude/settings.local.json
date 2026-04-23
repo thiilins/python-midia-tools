@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Skill(start-session)"
+      "Skill(start-session)",
+      "Skill(resume-vault)",
+      "Skill(update-config)"
     ]
   }
 }
