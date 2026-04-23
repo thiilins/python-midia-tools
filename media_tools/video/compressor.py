@@ -559,11 +559,21 @@ class CompressorVideo:
             filtros_video.append(filtro_resolucao)
             print(f"   📐 Reduzindo resolução para: {self.max_resolution}")
 
+        # Deriva maxrate do bitrate original quando não explicitamente definido.
+        # Garante que o encode nunca produza arquivo maior que o original.
+        bitrate_original_kbps = info_video.get("bitrate_total") or info_video.get("bitrate_video")
+        if self.max_bitrate:
+            max_bitrate_efetivo = self.max_bitrate
+        elif bitrate_original_kbps:
+            max_bitrate_efetivo = f"{int(bitrate_original_kbps)}k"
+        else:
+            max_bitrate_efetivo = None
+
         # Configurações de codificação
         if self.encoder_gpu:
             # GPU: usa encoder AMF/NVENC/QSV
             print(f"   ⚡ Usando GPU: {self.encoder_gpu}")
-            comando.extend(self._construir_comando_gpu(self.encoder_gpu, self.crf, self.max_bitrate))
+            comando.extend(self._construir_comando_gpu(self.encoder_gpu, self.crf, max_bitrate_efetivo))
         else:
             # CPU: libx265 com paralelismo máximo via x265-params
             # pools=N diz ao x265 quantos threads usar (usa cores físicos, não lógicos)
@@ -575,8 +585,8 @@ class CompressorVideo:
                 "-preset", self.preset,
                 "-x265-params", x265_params,
             ])
-            if self.max_bitrate:
-                comando.extend(["-maxrate", self.max_bitrate, "-bufsize", "2M"])
+            if max_bitrate_efetivo:
+                comando.extend(["-maxrate", max_bitrate_efetivo, "-bufsize", "2M"])
 
         # Aplica filtros de vídeo se houver
         if filtros_video:
