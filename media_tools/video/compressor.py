@@ -476,9 +476,9 @@ class CompressorVideo:
                 "-bf", "2",              # B-frames: melhor compressão por frame
             ]
             if max_bitrate:
-                # vbr_peak com -b:v 0 ignora o maxrate no AMF — precisa de target real
+                # cbr é o único modo AMF que garante enforcement real do bitrate
                 buf = bufsize or "4M"
-                args += ["-rc", "vbr_peak", "-b:v", max_bitrate, "-maxrate", max_bitrate, "-bufsize", buf] + base
+                args += ["-rc", "cbr", "-b:v", max_bitrate, "-maxrate", max_bitrate, "-bufsize", buf] + base
             else:
                 args += ["-rc", "cqp", "-b:v", "0"] + base
         elif encoder == "hevc_videotoolbox":
@@ -561,14 +561,15 @@ class CompressorVideo:
             filtros_video.append(filtro_resolucao)
             print(f"   📐 Reduzindo resolução para: {self.max_resolution}")
 
-        # Deriva maxrate a 90% do bitrate original — margem para overhead de container/headers.
-        # Garante que o encode nunca produza arquivo maior que o original.
-        bitrate_original_kbps = info_video.get("bitrate_total") or info_video.get("bitrate_video")
+        # Deriva maxrate a 90% do bitrate real do arquivo (tamanho/duração é mais confiável
+        # que o campo bit_rate do ffprobe, que pode errar em conteúdo VFR).
+        duracao = info_video.get("duracao") or 0
         if self.max_bitrate:
             max_bitrate_efetivo = self.max_bitrate
             bufsize_efetivo = None
-        elif bitrate_original_kbps:
-            capped_kbps = int(bitrate_original_kbps * 0.90)
+        elif duracao > 0:
+            bitrate_real_kbps = (arquivo_entrada.stat().st_size * 8) / duracao / 1000
+            capped_kbps = int(bitrate_real_kbps * 0.90)
             max_bitrate_efetivo = f"{capped_kbps}k"
             bufsize_efetivo = f"{capped_kbps * 2}k"
         else:
