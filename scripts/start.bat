@@ -114,6 +114,7 @@ echo   18. Cortar Video (copy mode, instantaneo)
 echo   19. Analisar Pasta de Videos
 echo   20. Converter FPS (60fps para 30fps)
 echo   21. Fatiar Video (segmentos via cut-settings)
+echo   22. Comprimir Video para Web (H.264 + faststart)
 echo.
 echo   0. Sair
 echo.
@@ -140,6 +141,7 @@ set "SCRIPTS[18]=cortar-video.py"
 set "SCRIPTS[19]=analisar-pasta.py"
 set "SCRIPTS[20]=converter-fps.py"
 set "SCRIPTS[21]=fatiar-video.py"
+set "SCRIPTS[22]=comprimir-web-video.py"
 
 if "%OPCAO%"=="0" (
     popd

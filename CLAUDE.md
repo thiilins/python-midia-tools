@@ -1,6 +1,6 @@
 # python-media-tools
 
-> Coleção de 21 scripts CLI para processamento de mídia — compressão H.265, otimização de imagens/vídeos, conversão de formatos, corte de vídeo, fatiamento batch, análise de pasta, conversão de FPS, OCR, remoção de fundo e utilitários de áudio/vídeo.
+> Coleção de 22 scripts CLI para processamento de mídia — compressão H.265, otimização de imagens/vídeos, conversão de formatos, corte de vídeo, fatiamento batch, análise de pasta, conversão de FPS, OCR, remoção de fundo, compressão web (H.264 + faststart) e utilitários de áudio/vídeo.
 
 ## Project Info
 
@@ -20,7 +20,7 @@ python-media-tools/
 ├── media_tools/
 │   ├── common/        → paths, progress, validators, resource_control
 │   ├── image/         → optimizer, converter, validator, ocr, background_remover, color_corrector, duplicate_detector
-│   └── video/         → compressor, optimizer, converter, corrector, extractor, merger, stabilizer, duplicate_detector, cutter, analyzer, fps_converter, slicer
+│   └── video/         → compressor, optimizer, converter, corrector, extractor, merger, stabilizer, duplicate_detector, cutter, analyzer, fps_converter, slicer, web_compressor
 ├── entrada/
 │   ├── imagens/       → imagens para processar
 │   └── videos/        → vídeos para processar
@@ -41,6 +41,7 @@ python-media-tools/
 - `FatiadorVideo`: lê `entrada/videos/cut-settings.(txt|json)` (JSON prioridade), extrai segmentos e concatena via `concat demuxer`; saída `saida/videos/` mesmo nome do original; `--delete` apaga original só após sucesso
 - `AnalisadorMidia`: somente leitura, 1 ffprobe por arquivo, estima com bitrate médio do preset
 - `ConversorFPS`: H.264 CRF 16 como intermediate de alta qualidade antes do H.265
+- `CompressorWebVideo`: H.264 + `-movflags +faststart` + `-pix_fmt yuv420p`; suporta mkv/avi/webm/flv etc.; resume automático (pula já convertidos); GPU via `h264_amf`; `--keep` para manter originais
 
 ## Anti-patterns
 
@@ -85,6 +86,9 @@ python-media-tools/
 | maxrate = file_size×8/duration×0.90 (não bit_rate ffprobe) | bit_rate impreciso em VFR; 90% absorve overhead de container | 23-04-2026 |
 | hevc_amf usa cbr quando maxrate definido | vbr_peak ignora maxrate mesmo com -b:v — cbr é único modo confiável | 23-04-2026 |
 | bufsize = 2× maxrate (dinâmico) | bufsize 2M fixo inadequado para streams >2000kbps | 23-04-2026 |
+| CompressorWebVideo usa libx264 (não libx265) | H.264 = compatibilidade máxima com browsers/players web; faststart habilita seek antes do download completo | 23-04-2026 |
+| h264_amf usa cqp (não cbr) no web compressor | Sem teto de bitrate — qualidade constante é o objetivo, não controle de tamanho | 23-04-2026 |
+| libx264 usa -threads (não x265-params pools) | libx264 aceita -threads normalmente; pools é exclusivo do libx265 | 23-04-2026 |
 
 ## Next Steps
 
