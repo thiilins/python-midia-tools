@@ -476,7 +476,8 @@ class CompressorVideo:
                 "-bf", "2",              # B-frames: melhor compressão por frame
             ]
             if max_bitrate:
-                args += ["-rc", "vbr_peak", "-b:v", "0", "-maxrate", max_bitrate] + base
+                # vbr_peak com -b:v 0 ignora o maxrate no AMF — precisa de target real
+                args += ["-rc", "vbr_peak", "-b:v", max_bitrate, "-maxrate", max_bitrate, "-bufsize", "2M"] + base
             else:
                 args += ["-rc", "cqp", "-b:v", "0"] + base
         elif encoder == "hevc_videotoolbox":
