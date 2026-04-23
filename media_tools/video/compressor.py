@@ -468,19 +468,15 @@ class CompressorVideo:
                 args += ["-maxrate", max_bitrate]
         elif encoder == "hevc_amf":
             qp = int(crf)
-            base = [
-                "-qp_i", str(qp),
-                "-qp_p", str(qp + 2),
-                "-qp_b", str(qp + 4),
-                "-quality", "balanced",  # ~30-40% mais rápido que "quality", diferença visual mínima
-                "-bf", "2",              # B-frames: melhor compressão por frame
-            ]
+            quality_base = ["-quality", "balanced", "-bf", "2"]
             if max_bitrate:
-                # cbr é o único modo AMF que garante enforcement real do bitrate
+                # CBR: não misturar QP com controle de taxa — QP sobrepõe o teto do CBR
+                # e causa encode maior que o original mesmo com maxrate definido
                 buf = bufsize or "4M"
-                args += ["-rc", "cbr", "-b:v", max_bitrate, "-maxrate", max_bitrate, "-bufsize", buf] + base
+                args += ["-rc", "cbr", "-b:v", max_bitrate, "-maxrate", max_bitrate, "-bufsize", buf] + quality_base
             else:
-                args += ["-rc", "cqp", "-b:v", "0"] + base
+                qp_args = ["-qp_i", str(qp), "-qp_p", str(qp + 2), "-qp_b", str(qp + 4)]
+                args += ["-rc", "cqp", "-b:v", "0"] + qp_args + quality_base
         elif encoder == "hevc_videotoolbox":
             # VideoToolbox usa escala 0-100, mapear CRF 18-35 → qualidade ~85-40
             qualidade = max(40, min(85, int(100 - (int(crf) - 18) * 2.5)))
@@ -563,13 +559,29 @@ class CompressorVideo:
 
         # Deriva maxrate a 90% do bitrate real do arquivo (tamanho/duração é mais confiável
         # que o campo bit_rate do ffprobe, que pode errar em conteúdo VFR).
+        # Quando há downscale de resolução, escala o cap pelo ratio de pixels — evita
+        # usar o bitrate de 1080p como teto para um encode 720p (que geraria arquivo maior).
         duracao = info_video.get("duracao") or 0
         if self.max_bitrate:
             max_bitrate_efetivo = self.max_bitrate
             bufsize_efetivo = None
         elif duracao > 0:
             bitrate_real_kbps = (arquivo_entrada.stat().st_size * 8) / duracao / 1000
-            capped_kbps = int(bitrate_real_kbps * 0.90)
+
+            # Ratio de pixels entre resolução de saída e entrada (ex: 1080p→720p = 0.444)
+            pixel_ratio = 1.0
+            if self.max_resolution:
+                w_orig = info_video.get("width") or 0
+                h_orig = info_video.get("height") or 0
+                if w_orig and h_orig:
+                    largura_max, altura_max = map(int, self.max_resolution.split("x"))
+                    if h_orig > w_orig:  # portrait
+                        largura_max, altura_max = altura_max, largura_max
+                    if w_orig > largura_max or h_orig > altura_max:
+                        escala = min(largura_max / w_orig, altura_max / h_orig)
+                        pixel_ratio = escala * escala  # área escala com o quadrado
+
+            capped_kbps = int(bitrate_real_kbps * pixel_ratio * 0.90)
             max_bitrate_efetivo = f"{capped_kbps}k"
             bufsize_efetivo = f"{capped_kbps * 2}k"
         else:
