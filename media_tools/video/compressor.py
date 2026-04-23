@@ -841,8 +841,19 @@ class CompressorVideo:
                 self.encoder_gpu = encoder_backup
 
             if sucesso and arquivo_destino.exists():
-                info_depois = self._obter_info_video(arquivo_destino)
                 tamanho_novo = arquivo_destino.stat().st_size / (1024 * 1024)
+
+                # Output maior ou igual ao original — re-encode não valeu a pena
+                if tamanho_novo >= tamanho_original:
+                    try:
+                        arquivo_destino.unlink()
+                    except OSError:
+                        pass
+                    print(f"   ⏩ Pulado — output maior que original ({tamanho_original:.2f}MB -> {tamanho_novo:.2f}MB). Original mantido.")
+                    pulados += 1
+                    continue
+
+                info_depois = self._obter_info_video(arquivo_destino)
                 reducao = 100 - (tamanho_novo / tamanho_original * 100)
                 total_original_mb += tamanho_original
                 total_novo_mb += tamanho_novo
