@@ -77,6 +77,8 @@ python-media-tools/
 | CortadorVideo em copy mode | Sem re-encode = instantâneo em 15GB, sem perda | 13-04-2026 |
 | FatiadorVideo lê cut-settings.(txt\|json) | Batch de múltiplos vídeos sem interatividade; JSON prioridade quando ambos existem | 23-04-2026 |
 | Concat via demuxer com temp dir por vídeo | Isolamento garante limpeza em `finally` mesmo em falha; 1 segmento = shutil.move direto | 23-04-2026 |
+| GPU 0 habilitada por padrão (USAR_GPU default=1) | Usuário sempre usa RX 9060 XT; USAR_GPU=0 para desabilitar | 23-04-2026 |
+| --delete padrão no compressor (--keep para manter) | Fluxo normal é sempre apagar original após compressão bem-sucedida | 23-04-2026 |
 | AnalisadorMidia somente leitura | Inventário antes de decidir o que comprimir | 13-04-2026 |
 | ConversorFPS usa H.264 CRF 16 | Intermediate alta qualidade para H.265 posterior | 13-04-2026 |
 | Encode ≥ original → apaga encode, move original para saída | Pasta saída sempre completa independente do resultado | 23-04-2026 |
