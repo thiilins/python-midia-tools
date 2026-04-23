@@ -239,9 +239,7 @@ def usar_aceleracao_hardware() -> bool:
     Returns:
         bool: True se deve usar, False caso contrário.
     """
-    # Por padrão, desabilita aceleração de hardware
-    # (pode ser fraca ou não disponível)
-    env_hw = os.getenv("USAR_GPU", "").lower()
+    env_hw = os.getenv("USAR_GPU", "1").lower()
     return env_hw in ["true", "1", "yes", "on"]
 
 
