@@ -5,6 +5,7 @@ Compressor de vídeos com H.265/HEVC para máxima redução de tamanho.
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 from pathlib import Path
@@ -843,19 +844,23 @@ class CompressorVideo:
             if sucesso and arquivo_destino.exists():
                 tamanho_novo = arquivo_destino.stat().st_size / (1024 * 1024)
 
-                # Output maior ou igual ao original — re-encode não valeu a pena
+                info_depois = self._obter_info_video(arquivo_destino)
+                reducao = 100 - (tamanho_novo / tamanho_original * 100)
+                total_original_mb += tamanho_original
+
+                # Output maior que original — descarta encode e move o original para saída
                 if tamanho_novo >= tamanho_original:
                     try:
                         arquivo_destino.unlink()
                     except OSError:
                         pass
-                    print(f"   ⏩ Pulado — output maior que original ({tamanho_original:.2f}MB -> {tamanho_novo:.2f}MB). Original mantido.")
+                    destino_original = pasta_saida / arquivo_origem.name
+                    shutil.move(str(arquivo_origem), str(destino_original))
+                    total_novo_mb += tamanho_original
+                    print(f"   ⏩ Já otimizado — encode maior ({tamanho_original:.2f}MB -> {tamanho_novo:.2f}MB). Original movido para saída.")
                     pulados += 1
                     continue
 
-                info_depois = self._obter_info_video(arquivo_destino)
-                reducao = 100 - (tamanho_novo / tamanho_original * 100)
-                total_original_mb += tamanho_original
                 total_novo_mb += tamanho_novo
 
                 print(f"   ✅ Finalizado.")
