@@ -113,6 +113,7 @@ echo   17. Detectar Duplicatas de Videos
 echo   18. Cortar Video (copy mode, instantaneo)
 echo   19. Analisar Pasta de Videos
 echo   20. Converter FPS (60fps para 30fps)
+echo   21. Fatiar Video (segmentos via cut-settings)
 echo.
 echo   0. Sair
 echo.
@@ -138,6 +139,7 @@ set "SCRIPTS[17]=detector-duplicatas-videos.py"
 set "SCRIPTS[18]=cortar-video.py"
 set "SCRIPTS[19]=analisar-pasta.py"
 set "SCRIPTS[20]=converter-fps.py"
+set "SCRIPTS[21]=fatiar-video.py"
 
 if "%OPCAO%"=="0" (
     popd

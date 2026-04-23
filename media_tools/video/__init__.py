@@ -13,6 +13,7 @@ from .corrector import CorretorVideo
 from .cutter import CortadorVideo
 from .analyzer import AnalisadorMidia
 from .fps_converter import ConversorFPS
+from .slicer import FatiadorVideo
 
 __all__ = [
     "OtimizadorVideo",
@@ -27,4 +28,5 @@ __all__ = [
     "CortadorVideo",
     "AnalisadorMidia",
     "ConversorFPS",
+    "FatiadorVideo",
 ]
