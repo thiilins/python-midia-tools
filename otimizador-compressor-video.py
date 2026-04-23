@@ -48,8 +48,9 @@ def main():
         print("  --amd                     # GPU AMD (hevc_amf + decode d3d11va) — RX 9060 XT")
         print("  --nvidia                  # GPU NVIDIA (hevc_nvenc)")
         print("  --gpu / -g                # GPU auto-detect (testa nvenc → qsv → amf)")
+        print("  --gpu-device N            # Índice da GPU D3D11 (padrão: 0)")
         print("  --sem-correcoes           # Pula correção de VFR/timestamps (mais rápido)")
-        print("  --delete / -d             # Apaga originais após conversão bem-sucedida")
+        print("  --no-delete / --keep / -k # Mantém originais após conversão (padrão: apaga)")
         print("\n⚙️  Controle de Recursos (variáveis de ambiente):")
         print("  FFMPEG_CPU_CORES=8        # Cores físicos para o encoder x265 (padrão: total-2)")
         print("  FFMPEG_THREADS=12         # Threads I/O do FFmpeg (padrão: 50% dos lógicos)")
@@ -64,10 +65,11 @@ def main():
         print("\n⚠️  IMPORTANTE: H.265 é ~50% mais lento que H.264, mas comprime muito mais!")
         sys.exit(0)
 
-    # Padrão: GPU AMD (hevc_amf + d3d11va)
+    # Padrão: GPU AMD device 0 (hevc_amf + d3d11va)
     if not os.getenv("USAR_GPU"):
         os.environ["USAR_GPU"] = "1"
         os.environ.setdefault("GPU_ENCODER", "hevc_amf")
+    os.environ.setdefault("GPU_DEVICE", "0")
 
     # Verifica preset via variável de ambiente ou argumento
     preset_nome = os.getenv("PRESET_VIDEO", None)
@@ -79,7 +81,7 @@ def main():
         corrigir_problemas = False
 
     # Processa argumentos
-    deletar_originais = False
+    deletar_originais = True
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -88,6 +90,9 @@ def main():
             i += 2
         elif args[i] in ["--sem-correcoes", "--no-fix", "--no-correcoes"]:
             corrigir_problemas = False
+            i += 1
+        elif args[i] in ["--no-delete", "--keep", "-k"]:
+            deletar_originais = False
             i += 1
         elif args[i] in ["--delete", "--apagar", "-d"]:
             deletar_originais = True
