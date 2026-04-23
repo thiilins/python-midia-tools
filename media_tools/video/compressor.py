@@ -443,7 +443,7 @@ class CompressorVideo:
         )
 
     def _construir_comando_gpu(
-        self, encoder: str, crf: str, max_bitrate: Optional[str]
+        self, encoder: str, crf: str, max_bitrate: Optional[str], bufsize: Optional[str] = None
     ) -> list:
         """
         Constrói os argumentos de codec para encoder GPU.
@@ -477,7 +477,8 @@ class CompressorVideo:
             ]
             if max_bitrate:
                 # vbr_peak com -b:v 0 ignora o maxrate no AMF — precisa de target real
-                args += ["-rc", "vbr_peak", "-b:v", max_bitrate, "-maxrate", max_bitrate, "-bufsize", "2M"] + base
+                buf = bufsize or "4M"
+                args += ["-rc", "vbr_peak", "-b:v", max_bitrate, "-maxrate", max_bitrate, "-bufsize", buf] + base
             else:
                 args += ["-rc", "cqp", "-b:v", "0"] + base
         elif encoder == "hevc_videotoolbox":
@@ -560,21 +561,25 @@ class CompressorVideo:
             filtros_video.append(filtro_resolucao)
             print(f"   📐 Reduzindo resolução para: {self.max_resolution}")
 
-        # Deriva maxrate do bitrate original quando não explicitamente definido.
+        # Deriva maxrate a 90% do bitrate original — margem para overhead de container/headers.
         # Garante que o encode nunca produza arquivo maior que o original.
         bitrate_original_kbps = info_video.get("bitrate_total") or info_video.get("bitrate_video")
         if self.max_bitrate:
             max_bitrate_efetivo = self.max_bitrate
+            bufsize_efetivo = None
         elif bitrate_original_kbps:
-            max_bitrate_efetivo = f"{int(bitrate_original_kbps)}k"
+            capped_kbps = int(bitrate_original_kbps * 0.90)
+            max_bitrate_efetivo = f"{capped_kbps}k"
+            bufsize_efetivo = f"{capped_kbps * 2}k"
         else:
             max_bitrate_efetivo = None
+            bufsize_efetivo = None
 
         # Configurações de codificação
         if self.encoder_gpu:
             # GPU: usa encoder AMF/NVENC/QSV
             print(f"   ⚡ Usando GPU: {self.encoder_gpu}")
-            comando.extend(self._construir_comando_gpu(self.encoder_gpu, self.crf, max_bitrate_efetivo))
+            comando.extend(self._construir_comando_gpu(self.encoder_gpu, self.crf, max_bitrate_efetivo, bufsize_efetivo))
         else:
             # CPU: libx265 com paralelismo máximo via x265-params
             # pools=N diz ao x265 quantos threads usar (usa cores físicos, não lógicos)
@@ -587,7 +592,8 @@ class CompressorVideo:
                 "-x265-params", x265_params,
             ])
             if max_bitrate_efetivo:
-                comando.extend(["-maxrate", max_bitrate_efetivo, "-bufsize", "2M"])
+                bufsize_cpu = bufsize_efetivo or "4M"
+                comando.extend(["-maxrate", max_bitrate_efetivo, "-bufsize", bufsize_cpu])
 
         # Aplica filtros de vídeo se houver
         if filtros_video:
