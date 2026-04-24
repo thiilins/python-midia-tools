@@ -50,7 +50,9 @@ def main():
         print("  --gpu / -g                # GPU auto-detect (testa nvenc → qsv → amf)")
         print("  --gpu-device N            # Índice da GPU D3D11 (padrão: 0)")
         print("  --sem-correcoes           # Pula correção de VFR/timestamps (mais rápido)")
-        print("  --no-delete / --keep / -k # Mantém originais após conversão (padrão: apaga)")
+        print("  --no-delete / --keep / -k # Mantém originais após conversão (padrão: apaga)
+  --ordem menor             # Fila: menor→maior (padrão)
+  --ordem maior             # Fila: maior→menor")
         print("\n⚙️  Controle de Recursos (variáveis de ambiente):")
         print("  FFMPEG_CPU_CORES=8        # Cores físicos para o encoder x265 (padrão: total-2)")
         print("  FFMPEG_THREADS=12         # Threads I/O do FFmpeg (padrão: 50% dos lógicos)")
@@ -82,6 +84,7 @@ def main():
 
     # Processa argumentos
     deletar_originais = True
+    ordem_fila = "menor"
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -111,17 +114,22 @@ def main():
         elif args[i] in ["--gpu-device"] and i + 1 < len(args):
             os.environ["GPU_DEVICE"] = args[i + 1]
             i += 2
+        elif args[i] in ["--ordem", "--order"] and i + 1 < len(args):
+            ordem_fila = args[i + 1]  # "menor" ou "maior"
+            i += 2
         else:
             i += 1
 
     try:
         if preset_nome:
             compressor = CompressorVideo(
-                preset_nome=preset_nome, corrigir_problemas=corrigir_problemas
+                preset_nome=preset_nome, corrigir_problemas=corrigir_problemas,
+                ordem_fila=ordem_fila,
             )
         else:
             compressor = CompressorVideo(
-                preset_nome="master_720p", corrigir_problemas=corrigir_problemas
+                preset_nome="master_720p", corrigir_problemas=corrigir_problemas,
+                ordem_fila=ordem_fila,
             )
 
         compressor.processar(deletar_originais=deletar_originais)

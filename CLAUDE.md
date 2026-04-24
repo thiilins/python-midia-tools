@@ -1,6 +1,7 @@
 # python-media-tools
 
 > Coleção de 22 scripts CLI para processamento de mídia — compressão H.265, otimização de imagens/vídeos, conversão de formatos, corte de vídeo, fatiamento batch, análise de pasta, conversão de FPS, OCR, remoção de fundo, compressão web (H.264 + faststart) e utilitários de áudio/vídeo.
+> `configs/` na raiz — arquivos de configuração commitados (ex: `cut-settings.json`)
 
 ## Project Info
 
@@ -42,6 +43,8 @@ python-media-tools/
 - `AnalisadorMidia`: somente leitura, 1 ffprobe por arquivo, estima com bitrate médio do preset
 - `ConversorFPS`: H.264 CRF 16 como intermediate de alta qualidade antes do H.265
 - `CompressorWebVideo`: H.264 + `-movflags +faststart` + `-pix_fmt yuv420p`; suporta mkv/avi/webm/flv etc.; resume automático (pula já convertidos); GPU via `h264_amf`; `--keep` para manter originais
+- `CompressorVideo`: fila ordenada por tamanho — padrão `menor→maior`; `--ordem maior` inverte para `maior→menor` (param `ordem_fila` no `__init__`)
+- `FatiadorVideo`: lê de `configs/cut-settings.(txt|json)` na raiz (não `entrada/videos/`); `--settings ARQUIVO` para path customizado
 
 ## Anti-patterns
 

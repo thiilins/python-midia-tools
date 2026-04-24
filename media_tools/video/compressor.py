@@ -132,6 +132,7 @@ class CompressorVideo:
         pasta_saida: Path = None,
         preset_nome: str = None,
         corrigir_problemas: bool = True,
+        ordem_fila: str = "menor",
     ):
         """
         Inicializa o compressor.
@@ -141,6 +142,7 @@ class CompressorVideo:
             pasta_saida: Pasta de saída (None = padrão).
             preset_nome: Nome do preset pré-configurado.
             corrigir_problemas: Se True, detecta e corrige problemas (VFR, timestamps, etc).
+            ordem_fila: Ordem de processamento por tamanho — 'menor' (padrão) ou 'maior'.
         """
         if pasta_entrada is None or pasta_saida is None:
             entrada, saida = obter_pastas_entrada_saida("videos")
@@ -165,6 +167,7 @@ class CompressorVideo:
         self.max_resolution = preset_config.get("max_resolution")
         self.max_bitrate = preset_config.get("max_bitrate")
         self.corrigir_problemas = corrigir_problemas
+        self.ordem_fila = ordem_fila  # "menor" = menor→maior (padrão) | "maior" = maior→menor
 
         # Permite sobrescrever o preset de velocidade via env var
         # ENCODER_VELOCIDADE=rapido → faster | normal → medium | lento → slow
@@ -799,16 +802,18 @@ class CompressorVideo:
         arquivos = sorted(
             (f for f in pasta_entrada.iterdir() if f.is_file() and f.suffix.lower() in self.EXTENSOES_VALIDAS),
             key=lambda f: f.stat().st_size,
+            reverse=(self.ordem_fila == "maior"),
         )
 
         if not arquivos:
             print("ℹ️  Nenhum vídeo encontrado.")
             return {"sucessos": 0, "falhas": 0, "pulados": 0}
 
+        ordem_label = "maior→menor" if self.ordem_fila == "maior" else "menor→maior"
         print(f"\n🚀 Iniciando compressão de {len(arquivos)} vídeo(s) com H.265/HEVC...")
         preset_info = self.PRESETS[self.preset_nome]
         print(f"⚙️  Preset: {self.preset_nome} - {preset_info['descricao']}")
-        print(f"   Configuração: CRF {self.crf} | Preset {self.preset} | Codec {self.codec}")
+        print(f"   Configuração: CRF {self.crf} | Preset {self.preset} | Codec {self.codec} | Fila {ordem_label}")
         if self.max_resolution:
             print(f"   Resolução máxima: {self.max_resolution}")
         if self.max_bitrate:
