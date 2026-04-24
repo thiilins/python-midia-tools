@@ -59,6 +59,11 @@ class CompressorVideo:
     # Tamanho mínimo para o gatilho MB/min — arquivos pequenos não justificam o encode
     # mesmo com MB/min alto (bastos 74MB 26.8 MB/min ≠ flyckerx 8.3GB 28.6 MB/min)
     HEVC_FORCA_MIN_MB = 500
+    # H.264 já comprimido eficientemente (bpp/s abaixo deste limiar) raramente
+    # beneficia de re-encode AV1 — o encoder usa bits similares ou mais para
+    # reproduzir artefatos do H.264 original. Skip instantâneo nesses casos.
+    # Acima do limiar (H.264 sobre-encodado), AV1 consegue compressão real.
+    H264_BPP_SKIP_LIMIT = 4.0
     # Abaixo deste tamanho, move direto para saída sem encode.
     # Economia real é mínima e correção VFR pode levar horas em arquivos pequenos.
     LIMIAR_MINIMO_MB = 50
@@ -988,6 +993,22 @@ class CompressorVideo:
                         _max_bitrate_override = f"{target_kbps}k"
                     modo = f"AV1 CQP (ref ~{target_kbps} kbps)" if usando_av1 else f"alvo {target_kbps} kbps ({int(self.HEVC_BPP_TARGET_RATIO*100)}% de {limite_kbps} kbps)"
                     print(f"   ⚠️  HEVC sobre-encodado ({bpp:.1f} bpp/s > {self.HEVC_BPP_SKIP_LIMIT}) — {modo}")
+
+            # Pré-check H.264: se bpp já eficiente, AV1 não consegue comprimir
+            # (encoder reproduz artefatos do H.264 usando bits similares ou mais).
+            if codec_fonte in ('h264', 'avc') and not self.max_bitrate:
+                bitrate_kbps = info_antes.get('bitrate_total') or 0
+                largura = info_antes.get('width') or 1
+                altura = info_antes.get('height') or 1
+                bpp = (bitrate_kbps * 1000) / (largura * altura)
+                if bpp <= self.H264_BPP_SKIP_LIMIT:
+                    print(f"   ⏩ H.264 eficiente ({bpp:.1f} bpp/s ≤ {self.H264_BPP_SKIP_LIMIT}) — movendo sem re-encode")
+                    destino_original = pasta_saida / arquivo_origem.name
+                    shutil.move(str(arquivo_origem), str(destino_original))
+                    total_original_mb += tamanho_original
+                    total_novo_mb += tamanho_original
+                    pulados += 1
+                    continue
 
             _max_bitrate_salvo = self.max_bitrate
             if _max_bitrate_override:
