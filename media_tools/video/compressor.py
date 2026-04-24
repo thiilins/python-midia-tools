@@ -46,7 +46,7 @@ class CompressorVideo:
     # Quando bpp > HEVC_BPP_SKIP_LIMIT, usa este ratio sobre o kbps do limiar como alvo.
     # Garante target agressivo proporcional à resolução, não 90% do source inflado.
     # Ex 720p: 6.0 bpp * 921600px / 1000 * 0.85 ≈ 4700 kbps.
-    HEVC_BPP_TARGET_RATIO = 0.85
+    HEVC_BPP_TARGET_RATIO = 0.70
     # Densidade MB/min acima da qual força re-encode mesmo com bpp já eficiente.
     # Valida duração × tamanho em vez de tamanho absoluto — um clipe de 2min com
     # 2 GB é diferente de uma gravação de 4h com 9 GB (28 MB/min vs 1000 MB/min).
