@@ -66,7 +66,7 @@ class CompressorVideo:
     H264_BPP_SKIP_LIMIT = 4.0
     # Abaixo deste tamanho, move direto para saída sem encode.
     # Economia real é mínima e correção VFR pode levar horas em arquivos pequenos.
-    LIMIAR_MINIMO_MB = 50
+    LIMIAR_MINIMO_MB = 100
 
     # Presets de compressão otimizados para H.265
     PRESETS = {
