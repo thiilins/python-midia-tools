@@ -37,7 +37,7 @@ class CompressorVideo:
     """
 
     # Extensões suportadas
-    EXTENSOES_VALIDAS = {".mp4", ".m4v", ".mov"}
+    EXTENSOES_VALIDAS = {".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi"}
 
     # Limiar de bpp/s acima do qual HEVC→HEVC ainda vale o encode.
     # Abaixo → conteúdo já eficiente; AMF CBR não consegue reduzir de forma confiável.
