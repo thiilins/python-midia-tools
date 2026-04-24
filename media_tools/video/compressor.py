@@ -47,6 +47,11 @@ class CompressorVideo:
     # Garante target agressivo proporcional à resolução, não 90% do source inflado.
     # Ex 720p: 6.0 bpp * 921600px / 1000 * 0.85 ≈ 4700 kbps.
     HEVC_BPP_TARGET_RATIO = 0.85
+    # Densidade MB/min acima da qual força re-encode mesmo com bpp já eficiente.
+    # Valida duração × tamanho em vez de tamanho absoluto — um clipe de 2min com
+    # 2 GB é diferente de uma gravação de 4h com 9 GB (28 MB/min vs 1000 MB/min).
+    # Nesses casos o target é source_kbps × HEVC_BPP_TARGET_RATIO.
+    HEVC_FORCA_MB_POR_MIN = 25  # ex: 4h 9GB = 28 MB/min → força; 8min 133MB = 17 → skip
 
     # Presets de compressão otimizados para H.265
     PRESETS = {
@@ -132,7 +137,9 @@ class CompressorVideo:
         },
     }
 
-    # Encoders GPU suportados para H.265 (em ordem de preferência)
+    # Encoders GPU para AV1 (primário — melhor compressão)
+    AV1_GPU_ENCODERS = ["av1_amf", "av1_nvenc", "av1_qsv"]
+    # Encoders GPU para H.265 (fallback quando AV1 falha ou não disponível)
     GPU_ENCODERS = ["hevc_nvenc", "hevc_qsv", "hevc_amf", "hevc_videotoolbox"]
 
     def __init__(
@@ -187,14 +194,17 @@ class CompressorVideo:
         else:
             self.preset = preset_config["preset"]
 
-        # Detecção de encoder GPU (se USAR_GPU=1)
-        self.encoder_gpu = None
+        # Detecção de encoders GPU (se USAR_GPU=1)
+        # Cadeia: av1_amf (primário) → hevc_amf (fallback GPU) → libx265 (CPU)
+        self.encoder_gpu = None       # encoder ativo (AV1 se disponível, senão HEVC)
+        self.encoder_hevc_gpu = None  # fallback HEVC GPU quando AV1 falha
         # Índice do adaptador D3D11: 0=GPU dedicada (padrão para RX 9060 XT)
-        # Sobrescrever com GPU_DEVICE=N se necessário (usar ffmpeg -init_hw_device list para verificar)
         env_device = os.getenv("GPU_DEVICE", "").strip()
         self.gpu_device_idx = int(env_device) if env_device.isdigit() else 0
         if usar_aceleracao_hardware():
-            self.encoder_gpu = self._detectar_encoder_gpu()
+            self.encoder_hevc_gpu = self._detectar_encoder_gpu()
+            encoder_av1 = self._detectar_encoder_av1_gpu()
+            self.encoder_gpu = encoder_av1 or self.encoder_hevc_gpu
 
         # Instancia o corretor de vídeo
         self.corretor = CorretorVideo(
@@ -255,6 +265,27 @@ class CompressorVideo:
             )
             output = resultado.stdout + resultado.stderr
             for encoder in self.GPU_ENCODERS:
+                if encoder in output:
+                    return encoder
+        except Exception:
+            pass
+        return None
+
+    def _detectar_encoder_av1_gpu(self) -> Optional[str]:
+        """Detecta encoder GPU para AV1. Respeita GPU_ENCODER=av1_amf etc."""
+        encoder_forcado = os.getenv("GPU_ENCODER", "").strip().lower()
+        if encoder_forcado in self.AV1_GPU_ENCODERS:
+            return encoder_forcado
+        aliases = {"av1": "av1_amf", "av1_amd": "av1_amf"}
+        if encoder_forcado in aliases:
+            return aliases[encoder_forcado]
+        try:
+            resultado = subprocess.run(
+                ["ffmpeg", "-encoders"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5,
+            )
+            output = resultado.stdout + resultado.stderr
+            for encoder in self.AV1_GPU_ENCODERS:
                 if encoder in output:
                     return encoder
         except Exception:
@@ -478,6 +509,14 @@ class CompressorVideo:
             args += ["-preset", "medium", "-global_quality", crf]
             if max_bitrate:
                 args += ["-maxrate", max_bitrate]
+        elif encoder == "av1_amf":
+            qp = int(crf)
+            quality_base = ["-quality", "balanced"]
+            if max_bitrate:
+                buf = bufsize or "4M"
+                args += ["-rc", "cbr", "-b:v", max_bitrate, "-maxrate", max_bitrate, "-bufsize", buf] + quality_base
+            else:
+                args += ["-rc", "cqp", "-b:v", "0", "-qp_i", str(qp), "-qp_p", str(qp + 2)] + quality_base
         elif encoder == "hevc_amf":
             qp = int(crf)
             quality_base = ["-quality", "balanced", "-bf", "2"]
@@ -828,7 +867,8 @@ class CompressorVideo:
         if self.max_bitrate:
             print(f"   Bitrate máximo: {self.max_bitrate}")
         if self.encoder_gpu:
-            encoder_info = f"{self.encoder_gpu} (adapter {self.gpu_device_idx} — GPU dedicada)"
+            fallback_label = f" → {self.encoder_hevc_gpu}" if self.encoder_hevc_gpu and self.encoder_gpu != self.encoder_hevc_gpu else ""
+            encoder_info = f"{self.encoder_gpu}{fallback_label} → CPU (adapter {self.gpu_device_idx})"
         else:
             encoder_info = f"libx265 (pools={self.cores_encoder}/{self.cores_fisicos} cores)"
         print(f"🔧 Encoder: {encoder_info}")
@@ -884,14 +924,24 @@ class CompressorVideo:
                 largura = info_antes.get('width') or 1
                 altura = info_antes.get('height') or 1
                 bpp = (bitrate_kbps * 1000) / (largura * altura)
-                if bpp <= self.HEVC_BPP_SKIP_LIMIT:
-                    print(f"   ⏩ HEVC eficiente ({bpp:.1f} bpp/s ≤ {self.HEVC_BPP_SKIP_LIMIT}) — pulando re-encode")
+                duracao_min = (info_antes.get('duracao') or 0) / 60
+                mb_por_min = (tamanho_original / duracao_min) if duracao_min > 0 else 0
+                if bpp <= self.HEVC_BPP_SKIP_LIMIT and mb_por_min <= self.HEVC_FORCA_MB_POR_MIN:
+                    print(f"   ⏩ HEVC eficiente ({bpp:.1f} bpp/s, {mb_por_min:.1f} MB/min) — pulando re-encode")
                     destino_original = pasta_saida / arquivo_origem.name
                     shutil.move(str(arquivo_origem), str(destino_original))
                     total_original_mb += tamanho_original
                     total_novo_mb += tamanho_original
                     pulados += 1
                     continue
+                elif bpp <= self.HEVC_BPP_SKIP_LIMIT:
+                    # bpp ok mas gravação longa/densa — tamanho absoluto justifica o encode
+                    target_kbps = int(bitrate_kbps * self.HEVC_BPP_TARGET_RATIO)
+                    _max_bitrate_override = f"{target_kbps}k"
+                    print(
+                        f"   ⚠️  HEVC denso ({mb_por_min:.1f} MB/min > {self.HEVC_FORCA_MB_POR_MIN})"
+                        f" — alvo {target_kbps} kbps ({int(self.HEVC_BPP_TARGET_RATIO*100)}% do source)"
+                    )
                 else:
                     limite_kbps = int(self.HEVC_BPP_SKIP_LIMIT * largura * altura / 1000)
                     target_kbps = int(limite_kbps * self.HEVC_BPP_TARGET_RATIO)
@@ -907,19 +957,30 @@ class CompressorVideo:
             try:
                 sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
 
-                # Fallback para CPU quando GPU falha (dimensões incomuns, VFR, etc.)
+                # Cadeia de fallback: AV1 GPU → HEVC GPU → CPU
                 if not sucesso and self.encoder_gpu:
-                    # Remove arquivo corrompido gerado pela tentativa falha
                     if arquivo_destino.exists():
-                        try:
-                            arquivo_destino.unlink()
-                        except OSError:
-                            pass
-                    print(f"   🔄 GPU falhou, tentando CPU (libx265)...")
-                    encoder_backup = self.encoder_gpu
-                    self.encoder_gpu = None
-                    sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
-                    self.encoder_gpu = encoder_backup
+                        try: arquivo_destino.unlink()
+                        except OSError: pass
+
+                    # Se estava usando AV1 e tem HEVC GPU disponível, tenta HEVC primeiro
+                    if self.encoder_gpu != self.encoder_hevc_gpu and self.encoder_hevc_gpu:
+                        print(f"   🔄 AV1 falhou, tentando HEVC GPU ({self.encoder_hevc_gpu})...")
+                        encoder_backup = self.encoder_gpu
+                        self.encoder_gpu = self.encoder_hevc_gpu
+                        sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
+                        self.encoder_gpu = encoder_backup
+                        if not sucesso and arquivo_destino.exists():
+                            try: arquivo_destino.unlink()
+                            except OSError: pass
+
+                    # Último recurso: CPU libx265
+                    if not sucesso:
+                        print(f"   🔄 GPU falhou, tentando CPU (libx265)...")
+                        encoder_backup = self.encoder_gpu
+                        self.encoder_gpu = None
+                        sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
+                        self.encoder_gpu = encoder_backup
             finally:
                 self.max_bitrate = _max_bitrate_salvo
 
