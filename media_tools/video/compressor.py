@@ -47,6 +47,10 @@ class CompressorVideo:
     # Garante target agressivo proporcional à resolução, não 90% do source inflado.
     # Ex 720p: 6.0 bpp * 921600px / 1000 * 0.85 ≈ 4700 kbps.
     HEVC_BPP_TARGET_RATIO = 0.70
+    # Offset de QP aplicado ao av1_amf sobre o CRF do preset.
+    # AV1 é mais eficiente que HEVC — +4 QP mantém qualidade visual equivalente
+    # ao HEVC no mesmo CRF, com arquivos ~15-25% menores.
+    AV1_QP_OFFSET = 4
     # Densidade MB/min acima da qual força re-encode mesmo com bpp já eficiente.
     # Valida duração × tamanho em vez de tamanho absoluto — um clipe de 2min com
     # 2 GB é diferente de uma gravação de 4h com 9 GB (28 MB/min vs 1000 MB/min).
@@ -510,8 +514,8 @@ class CompressorVideo:
             if max_bitrate:
                 args += ["-maxrate", max_bitrate]
         elif encoder == "av1_amf":
-            qp = int(crf)
-            quality_base = ["-quality", "balanced"]
+            qp = int(crf) + self.AV1_QP_OFFSET
+            quality_base = ["-quality", "quality"]
             if max_bitrate:
                 buf = bufsize or "4M"
                 args += ["-rc", "cbr", "-b:v", max_bitrate, "-maxrate", max_bitrate, "-bufsize", buf] + quality_base
