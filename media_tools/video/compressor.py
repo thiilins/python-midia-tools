@@ -643,9 +643,8 @@ class CompressorVideo:
         if self.encoder_gpu:
             # GPU: usa encoder AMF/NVENC/QSV
             print(f"   ⚡ Usando GPU: {self.encoder_gpu}")
-            # AV1: CBR não é confiável em re-encodes próximos ao source — usa CQP sempre,
-            # exceto quando o preset tem hard max_bitrate (target agressivo, CBR funciona)
-            if self.encoder_gpu in self.AV1_GPU_ENCODERS and not self.max_bitrate:
+            # AV1: sempre CQP — CBR não é confiável em re-encodes (ignora maxrate)
+            if self.encoder_gpu in self.AV1_GPU_ENCODERS:
                 comando.extend(self._construir_comando_gpu(self.encoder_gpu, self.crf, None, None))
             else:
                 comando.extend(self._construir_comando_gpu(self.encoder_gpu, self.crf, max_bitrate_efetivo, bufsize_efetivo))
@@ -823,6 +822,11 @@ class CompressorVideo:
                 processo.wait(timeout=5)
             except Exception:
                 pass
+            try:
+                if arquivo_saida.exists():
+                    arquivo_saida.unlink()
+            except Exception:
+                pass
             raise
         except Exception as e:
             erro_msg = f"Erro ao executar FFmpeg: {str(e)}"
@@ -949,19 +953,19 @@ class CompressorVideo:
                 elif bpp <= self.HEVC_BPP_SKIP_LIMIT:
                     # bpp ok mas gravação longa/densa — tamanho absoluto justifica o encode
                     target_kbps = int(bitrate_kbps * self.HEVC_BPP_TARGET_RATIO)
-                    _max_bitrate_override = f"{target_kbps}k"
-                    print(
-                        f"   ⚠️  HEVC denso ({mb_por_min:.1f} MB/min > {self.HEVC_FORCA_MB_POR_MIN})"
-                        f" — alvo {target_kbps} kbps ({int(self.HEVC_BPP_TARGET_RATIO*100)}% do source)"
-                    )
+                    usando_av1 = self.encoder_gpu in self.AV1_GPU_ENCODERS
+                    if not usando_av1:
+                        _max_bitrate_override = f"{target_kbps}k"
+                    modo = f"AV1 CQP (ref ~{target_kbps} kbps)" if usando_av1 else f"alvo {target_kbps} kbps ({int(self.HEVC_BPP_TARGET_RATIO*100)}% do source)"
+                    print(f"   ⚠️  HEVC denso ({mb_por_min:.1f} MB/min > {self.HEVC_FORCA_MB_POR_MIN}) — {modo}")
                 else:
                     limite_kbps = int(self.HEVC_BPP_SKIP_LIMIT * largura * altura / 1000)
                     target_kbps = int(limite_kbps * self.HEVC_BPP_TARGET_RATIO)
-                    _max_bitrate_override = f"{target_kbps}k"
-                    print(
-                        f"   ⚠️  HEVC sobre-encodado ({bpp:.1f} bpp/s > {self.HEVC_BPP_SKIP_LIMIT})"
-                        f" — alvo {target_kbps} kbps ({int(self.HEVC_BPP_TARGET_RATIO*100)}% de {limite_kbps} kbps)"
-                    )
+                    usando_av1 = self.encoder_gpu in self.AV1_GPU_ENCODERS
+                    if not usando_av1:
+                        _max_bitrate_override = f"{target_kbps}k"
+                    modo = f"AV1 CQP (ref ~{target_kbps} kbps)" if usando_av1 else f"alvo {target_kbps} kbps ({int(self.HEVC_BPP_TARGET_RATIO*100)}% de {limite_kbps} kbps)"
+                    print(f"   ⚠️  HEVC sobre-encodado ({bpp:.1f} bpp/s > {self.HEVC_BPP_SKIP_LIMIT}) — {modo}")
 
             _max_bitrate_salvo = self.max_bitrate
             if _max_bitrate_override:
