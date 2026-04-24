@@ -923,15 +923,26 @@ class CompressorVideo:
 
         def _triar(arquivo_origem):
             tamanho_mb = arquivo_origem.stat().st_size / (1024 * 1024)
-            if arquivo_origem.suffix.lower() == '.mp4' and tamanho_mb < 100:
+            eh_mp4 = arquivo_origem.suffix.lower() == '.mp4'
+
+            if eh_mp4 and tamanho_mb < 100:
                 info = self._obter_info_video(arquivo_origem)
                 codec = info.get('codec', '')
                 fps = float(info.get('fps') or 0)
                 resolucao_ok = self._construir_filtro_resolucao(info) is None
+
+                # < 10MB HEVC → pula sempre (arquivo insignificante)
+                if codec == 'hevc' and tamanho_mb < 10:
+                    destino = pasta_saida / arquivo_origem.name
+                    shutil.move(str(arquivo_origem), str(destino))
+                    return ('skip', arquivo_origem, tamanho_mb, fps)
+
+                # < 100MB HEVC + resolução ok + FPS ok → pula
                 if codec == 'hevc' and resolucao_ok and (fps <= self.MAX_FPS or fps == 0):
                     destino = pasta_saida / arquivo_origem.name
                     shutil.move(str(arquivo_origem), str(destino))
                     return ('skip', arquivo_origem, tamanho_mb, fps)
+
             return ('converter', arquivo_origem, 0, 0)
 
         workers = min(16, (os.cpu_count() or 4) * 2)
