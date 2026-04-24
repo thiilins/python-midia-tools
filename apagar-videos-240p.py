@@ -8,11 +8,9 @@ Uso:
 """
 
 import argparse
-import json
-import subprocess
-import sys
 from pathlib import Path
 
+import cv2
 from send2trash import send2trash
 
 EXTENSOES = {".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi"}
@@ -21,17 +19,10 @@ RESOLUCAO_MAX = 240  # lado curto ≤ 240 → 240p
 
 def obter_resolucao(arquivo: Path):
     try:
-        resultado = subprocess.run(
-            [
-                "ffprobe", "-v", "quiet", "-print_format", "json",
-                "-show_streams", "-select_streams", "v:0", str(arquivo),
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10,
-        )
-        data = json.loads(resultado.stdout)
-        stream = data.get("streams", [{}])[0]
-        w = int(stream.get("width", 0))
-        h = int(stream.get("height", 0))
+        cap = cv2.VideoCapture(str(arquivo))
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
         return w, h
     except Exception:
         return 0, 0
