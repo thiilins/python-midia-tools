@@ -38,7 +38,7 @@ python-media-tools/
 - **Checklist novo script**: criar módulo → criar CLI → exportar em `__init__.py` → adicionar ao `start.bat` + `start.sh`
 - Scripts interativos (ex: cutter) usam `input()` no `processar()` — sem arquivo de config externo
 - `CortadorVideo`: copy mode via `-c copy -avoid_negative_ts make_zero`, saída em `saida/clips/`
-- `FatiadorVideo`: lê `entrada/videos/cut-settings.(txt|json)` (JSON prioridade), extrai segmentos e concatena via `concat demuxer`; saída `saida/videos/` mesmo nome do original; `--delete` apaga original só após sucesso
+- `FatiadorVideo`: lê `configs/cut-settings.(txt|json)` na raiz do projeto (JSON prioridade), extrai segmentos e concatena via `concat demuxer`; saída `saida/videos/` mesmo nome do original; `--delete` apaga original só após sucesso
 - `AnalisadorMidia`: somente leitura, 1 ffprobe por arquivo, estima com bitrate médio do preset
 - `ConversorFPS`: H.264 CRF 16 como intermediate de alta qualidade antes do H.265
 - `CompressorWebVideo`: H.264 + `-movflags +faststart` + `-pix_fmt yuv420p`; suporta mkv/avi/webm/flv etc.; resume automático (pula já convertidos); GPU via `h264_amf`; `--keep` para manter originais
@@ -76,7 +76,7 @@ python-media-tools/
 | x265-params pools em vez de -threads | -threads é ignorado pelo libx265 | 12-04-2026 |
 | obter_cores_encoder() = total-2 | Deixa 2 cores livres para uso paralelo | 12-04-2026 |
 | CortadorVideo em copy mode | Sem re-encode = instantâneo em 15GB, sem perda | 13-04-2026 |
-| FatiadorVideo lê cut-settings.(txt\|json) | Batch de múltiplos vídeos sem interatividade; JSON prioridade quando ambos existem | 23-04-2026 |
+| FatiadorVideo lê cut-settings.(txt\|json) | Batch de múltiplos vídeos sem interatividade; JSON prioridade quando ambos existem; arquivos em `configs/` na raiz | 23-04-2026 |
 | Concat via demuxer com temp dir por vídeo | Isolamento garante limpeza em `finally` mesmo em falha; 1 segmento = shutil.move direto | 23-04-2026 |
 | GPU 0 habilitada por padrão (USAR_GPU default=1) | Usuário sempre usa RX 9060 XT; USAR_GPU=0 para desabilitar | 23-04-2026 |
 | --delete padrão no compressor (--keep para manter) | Fluxo normal é sempre apagar original após compressão bem-sucedida | 23-04-2026 |

@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from ..common.paths import criar_pastas, obter_pastas_entrada_saida
+from ..common.paths import criar_pastas, obter_diretorio_base, obter_pastas_entrada_saida
 from ..common.validators import verificar_ffmpeg
 from .cutter import _converter_tempo, _formatar_tempo
 
@@ -40,23 +40,25 @@ class FatiadorVideo:
             self.pasta_entrada = Path(pasta_entrada)
             self.pasta_saida = Path(pasta_saida)
         self.deletar_originais = deletar_originais
+        self.pasta_configs = obter_diretorio_base() / "configs"
 
     def _carregar_settings(self, arquivo_settings: Optional[Path] = None) -> list:
         """
-        Carrega cut-settings.json ou cut-settings.txt da pasta de entrada.
+        Carrega cut-settings.json ou cut-settings.txt de configs/ na raiz do projeto.
         JSON tem prioridade quando ambos existem.
         Retorna lista de dicts: [{"arquivo": str, "segmentos": ["HH:MM:SS-HH:MM:SS", ...]}]
         """
         if arquivo_settings:
             caminho = Path(arquivo_settings)
         else:
-            json_path = self.pasta_entrada / self.NOME_SETTINGS_JSON
-            txt_path = self.pasta_entrada / self.NOME_SETTINGS_TXT
+            json_path = self.pasta_configs / self.NOME_SETTINGS_JSON
+            txt_path = self.pasta_configs / self.NOME_SETTINGS_TXT
             if json_path.exists():
                 caminho = json_path
             elif txt_path.exists():
                 caminho = txt_path
             else:
+                print(f"⚠️  Nenhum settings encontrado em {self.pasta_configs}")
                 return []
 
         if caminho.suffix == ".json":

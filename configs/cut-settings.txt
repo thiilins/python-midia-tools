@@ -1,0 +1,5 @@
+# Formato: nome_do_arquivo.mp4: HH:MM:SS-HH:MM:SS|HH:MM:SS-HH:MM:SS
+# Separe múltiplos segmentos com |
+# JSON tem prioridade quando ambos os arquivos existem
+
+video.mp4: 00:00:00-00:10:00|00:12:00-00:20:00
