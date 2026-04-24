@@ -1013,9 +1013,11 @@ class CompressorVideo:
 
                 total_novo_mb += tamanho_novo
 
+                economizado_acum = total_original_mb - total_novo_mb
                 print(f"   ✅ Finalizado.")
                 print(
                     f"   📊 Redução: {reducao:.1f}% ({tamanho_original:.2f}MB -> {tamanho_novo:.2f}MB)"
+                    f" | 💾 Total poupado: {economizado_acum:.0f}MB"
                 )
                 print(
                     f"   Depois: {info_depois['width']}x{info_depois['height']} | "
