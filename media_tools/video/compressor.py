@@ -643,7 +643,12 @@ class CompressorVideo:
         if self.encoder_gpu:
             # GPU: usa encoder AMF/NVENC/QSV
             print(f"   ⚡ Usando GPU: {self.encoder_gpu}")
-            comando.extend(self._construir_comando_gpu(self.encoder_gpu, self.crf, max_bitrate_efetivo, bufsize_efetivo))
+            # AV1: CBR não é confiável em re-encodes próximos ao source — usa CQP sempre,
+            # exceto quando o preset tem hard max_bitrate (target agressivo, CBR funciona)
+            if self.encoder_gpu in self.AV1_GPU_ENCODERS and not self.max_bitrate:
+                comando.extend(self._construir_comando_gpu(self.encoder_gpu, self.crf, None, None))
+            else:
+                comando.extend(self._construir_comando_gpu(self.encoder_gpu, self.crf, max_bitrate_efetivo, bufsize_efetivo))
         else:
             # CPU: libx265 com paralelismo máximo via x265-params
             # pools=N diz ao x265 quantos threads usar (usa cores físicos, não lógicos)
@@ -812,6 +817,13 @@ class CompressorVideo:
                         erro_msg += f": {linhas_erro[-1][:200]}"
                 return False, erro_msg
 
+        except KeyboardInterrupt:
+            try:
+                processo.kill()
+                processo.wait(timeout=5)
+            except Exception:
+                pass
+            raise
         except Exception as e:
             erro_msg = f"Erro ao executar FFmpeg: {str(e)}"
             with stderr_lock:
