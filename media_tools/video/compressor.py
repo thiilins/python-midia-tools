@@ -58,7 +58,7 @@ class CompressorVideo:
     HEVC_FORCA_MB_POR_MIN = 25   # ex: 4h 9GB = 28 MB/min → força; 8min 133MB = 17 → skip
     # Tamanho mínimo para o gatilho MB/min — arquivos pequenos não justificam o encode
     # mesmo com MB/min alto (bastos 74MB 26.8 MB/min ≠ flyckerx 8.3GB 28.6 MB/min)
-    HEVC_FORCA_MIN_MB = 500
+    HEVC_FORCA_MIN_MB = 2048  # 2 GB — abaixo disso MB/min não aciona encode
     # H.264 já comprimido eficientemente (bpp/s abaixo deste limiar) raramente
     # beneficia de re-encode AV1 — o encoder usa bits similares ou mais para
     # reproduzir artefatos do H.264 original. Skip instantâneo nesses casos.
