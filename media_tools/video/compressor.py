@@ -64,9 +64,9 @@ class CompressorVideo:
     # reproduzir artefatos do H.264 original. Skip instantâneo nesses casos.
     # Acima do limiar (H.264 sobre-encodado), AV1 consegue compressão real.
     H264_BPP_SKIP_LIMIT = 4.0
-    # Abaixo deste tamanho, move direto para saída sem encode.
-    # Economia real é mínima e correção VFR pode levar horas em arquivos pequenos.
-    LIMIAR_MINIMO_MB = 100
+    # Cap de FPS — frames acima deste valor são reduzidos antes do encode.
+    # Reduz bitrate, acelera encode e converte VFR para CFR sem reescrever timestamps.
+    MAX_FPS = 30
 
     # Presets de compressão otimizados para H.265
     PRESETS = {
@@ -210,16 +210,16 @@ class CompressorVideo:
             self.preset = preset_config["preset"]
 
         # Detecção de encoders GPU (se USAR_GPU=1)
-        # Cadeia: av1_amf (primário) → hevc_amf (fallback GPU) → libx265 (CPU)
-        self.encoder_gpu = None       # encoder ativo (AV1 se disponível, senão HEVC)
-        self.encoder_hevc_gpu = None  # fallback HEVC GPU quando AV1 falha
+        # Cadeia: hevc_amf (primário) → av1_amf (fallback GPU) → libx265 (CPU)
+        self.encoder_gpu = None       # encoder ativo (HEVC se disponível, senão AV1)
+        self.encoder_av1_gpu = None   # fallback AV1 GPU quando HEVC falha
         # Índice do adaptador D3D11: 0=GPU dedicada (padrão para RX 9060 XT)
         env_device = os.getenv("GPU_DEVICE", "").strip()
         self.gpu_device_idx = int(env_device) if env_device.isdigit() else 0
         if usar_aceleracao_hardware():
-            self.encoder_hevc_gpu = self._detectar_encoder_gpu()
-            encoder_av1 = self._detectar_encoder_av1_gpu()
-            self.encoder_gpu = encoder_av1 or self.encoder_hevc_gpu
+            self.encoder_gpu = self._detectar_encoder_gpu()  # hevc_amf
+            self.encoder_av1_gpu = self._detectar_encoder_av1_gpu()
+        self.encoder_hevc_gpu = self.encoder_gpu  # alias para clareza no fallback
 
         # Instancia o corretor de vídeo
         self.corretor = CorretorVideo(
@@ -608,13 +608,13 @@ class CompressorVideo:
         # Filtros de vídeo
         filtros_video = []
 
-        # Correção de VFR
-        if aplicar_correcoes and problemas["vfr"]:
-            fps_alvo = info_video.get("fps", 30)
-            if fps_alvo and fps_alvo > 0:
-                fps_alvo = round(fps_alvo)
-            else:
-                fps_alvo = 30
+        # FPS cap + correção de VFR — aplica fps=N sempre que source > MAX_FPS
+        # ou quando há VFR detectado. Converte VFR→CFR sem reescrever timestamps.
+        fps_source = float(info_video.get("fps") or 0)
+        if self.MAX_FPS and fps_source > self.MAX_FPS:
+            filtros_video.append(f"fps={self.MAX_FPS}")
+        elif aplicar_correcoes and problemas.get("vfr"):
+            fps_alvo = round(fps_source) if fps_source > 0 else 30
             filtros_video.append(f"fps={fps_alvo}")
 
         # Filtro de resolução
@@ -961,17 +961,17 @@ class CompressorVideo:
             try:
                 sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
 
-                # Cadeia de fallback: AV1 GPU → HEVC GPU → CPU
+                # Cadeia de fallback: hevc_amf → av1_amf → CPU libx265
                 if not sucesso and self.encoder_gpu:
                     if arquivo_destino.exists():
                         try: arquivo_destino.unlink()
                         except OSError: pass
 
-                    # Se estava usando AV1 e tem HEVC GPU disponível, tenta HEVC primeiro
-                    if self.encoder_gpu != self.encoder_hevc_gpu and self.encoder_hevc_gpu:
-                        print(f"   🔄 AV1 falhou, tentando HEVC GPU ({self.encoder_hevc_gpu})...")
+                    # HEVC falhou → tenta AV1
+                    if self.encoder_av1_gpu and self.encoder_gpu != self.encoder_av1_gpu:
+                        print(f"   🔄 HEVC falhou, tentando AV1 ({self.encoder_av1_gpu})...")
                         encoder_backup = self.encoder_gpu
-                        self.encoder_gpu = self.encoder_hevc_gpu
+                        self.encoder_gpu = self.encoder_av1_gpu
                         sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
                         self.encoder_gpu = encoder_backup
                         if not sucesso and arquivo_destino.exists():
@@ -997,16 +997,29 @@ class CompressorVideo:
 
                 # Output maior que original — descarta encode e move o original para saída
                 if tamanho_novo >= tamanho_original:
-                    try:
-                        arquivo_destino.unlink()
-                    except OSError:
-                        pass
-                    destino_original = pasta_saida / arquivo_origem.name
-                    shutil.move(str(arquivo_origem), str(destino_original))
-                    total_novo_mb += tamanho_original
-                    print(f"   ⏩ Já otimizado — encode maior ({tamanho_original:.2f}MB -> {tamanho_novo:.2f}MB). Original movido para saída.")
-                    pulados += 1
-                    continue
+                    if arquivo_origem.suffix.lower() == '.mp4':
+                        # Mesmo formato — não vale a pena, descarta encode e move original
+                        try:
+                            arquivo_destino.unlink()
+                        except OSError:
+                            pass
+                        destino_original = pasta_saida / arquivo_origem.name
+                        shutil.move(str(arquivo_origem), str(destino_original))
+                        total_novo_mb += tamanho_original
+                        print(f"   ⏩ Já otimizado — encode maior ({tamanho_original:.2f}MB -> {tamanho_novo:.2f}MB). Original movido para saída.")
+                        pulados += 1
+                        continue
+                    else:
+                        # Formato diferente (webm/mov/mkv) — mantém MP4 convertido
+                        # e apaga original (objetivo é padronizar para MP4)
+                        try:
+                            arquivo_origem.unlink()
+                        except OSError:
+                            pass
+                        total_novo_mb += tamanho_novo
+                        print(f"   🔄 Convertido para MP4 ({tamanho_original:.2f}MB {arquivo_origem.suffix} -> {tamanho_novo:.2f}MB mp4). Original removido.")
+                        sucessos += 1
+                        continue
 
                 total_novo_mb += tamanho_novo
 
