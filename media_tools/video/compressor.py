@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional, Dict
 
@@ -915,16 +916,14 @@ class CompressorVideo:
         total_original_mb = 0.0
         total_novo_mb = 0.0
 
-        # ── PASSO 1: move skips instantaneamente ─────────────────────────────
-        # HEVC + MP4 + < 100MB + FPS ≤ MAX_FPS → já otimizado, sem encode
-        # Reduz a fila visualmente antes de iniciar os encodes pesados.
+        # ── PASSO 1: triagem paralela — move skips, monta fila de encode ───────
+        converter_lock = threading.Lock()
+        stats_lock = threading.Lock()
         converter = []
-        print(f"\n⚡ Passo 1/2 — triagem rápida ({len(arquivos)} arquivos)...")
-        for arquivo_origem in arquivos:
-            tamanho_mb = arquivo_origem.stat().st_size / (1024 * 1024)
-            eh_mp4 = arquivo_origem.suffix.lower() == '.mp4'
 
-            if eh_mp4 and tamanho_mb < 100:
+        def _triar(arquivo_origem):
+            tamanho_mb = arquivo_origem.stat().st_size / (1024 * 1024)
+            if arquivo_origem.suffix.lower() == '.mp4' and tamanho_mb < 100:
                 info = self._obter_info_video(arquivo_origem)
                 codec = info.get('codec', '')
                 fps = float(info.get('fps') or 0)
@@ -932,15 +931,32 @@ class CompressorVideo:
                 if codec == 'hevc' and resolucao_ok and (fps <= self.MAX_FPS or fps == 0):
                     destino = pasta_saida / arquivo_origem.name
                     shutil.move(str(arquivo_origem), str(destino))
-                    total_original_mb += tamanho_mb
-                    total_novo_mb += tamanho_mb
-                    pulados += 1
-                    print(f"   ⏩ {arquivo_origem.name} ({tamanho_mb:.1f}MB, HEVC, {fps:.0f}fps)")
-                    continue
+                    return ('skip', arquivo_origem, tamanho_mb, fps)
+            return ('converter', arquivo_origem, 0, 0)
 
-            converter.append(arquivo_origem)
+        workers = min(16, (os.cpu_count() or 4) * 2)
+        print(f"\n⚡ Passo 1/2 — triagem paralela ({len(arquivos)} arquivos, {workers} workers)...")
+        concluidos = 0
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futuros = {pool.submit(_triar, a): a for a in arquivos}
+            for fut in as_completed(futuros):
+                resultado, arquivo, tamanho_mb, fps = fut.result()
+                concluidos += 1
+                print(f"\r   {concluidos}/{len(arquivos)}", end="", flush=True)
+                if resultado == 'skip':
+                    with stats_lock:
+                        total_original_mb += tamanho_mb
+                        total_novo_mb += tamanho_mb
+                        pulados += 1
+                    print(f"\r   ⏩ {arquivo.name} ({tamanho_mb:.1f}MB, HEVC, {fps:.0f}fps){'':20}")
+                else:
+                    with converter_lock:
+                        converter.append(arquivo)
 
-        print(f"   ✅ {pulados} pulados, {len(converter)} para converter\n")
+        # Restaura a ordem original para o encode
+        ordem_set = {a: i for i, a in enumerate(arquivos)}
+        converter.sort(key=lambda a: ordem_set.get(a, 0))
+        print(f"\r   ✅ {pulados} pulados, {len(converter)} para converter{'':20}\n")
 
         # ── PASSO 2: encode dos arquivos restantes ────────────────────────────
         for i, arquivo_origem in enumerate(converter, 1):
