@@ -928,7 +928,8 @@ class CompressorVideo:
                 info = self._obter_info_video(arquivo_origem)
                 codec = info.get('codec', '')
                 fps = float(info.get('fps') or 0)
-                if codec == 'hevc' and (fps <= self.MAX_FPS or fps == 0):
+                resolucao_ok = self._construir_filtro_resolucao(info) is None
+                if codec == 'hevc' and resolucao_ok and (fps <= self.MAX_FPS or fps == 0):
                     destino = pasta_saida / arquivo_origem.name
                     shutil.move(str(arquivo_origem), str(destino))
                     total_original_mb += tamanho_mb
