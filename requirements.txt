@@ -98,3 +98,4 @@ psutil>=5.9.0
 # imagehash: Hashing de imagens para detecção de duplicatas
 #   - Usado em: detector-duplicatas-imagens.py
 imagehash>=4.3.1
+send2trash
