@@ -931,9 +931,9 @@ class CompressorVideo:
 
             print(f"\n[{i}/{len(arquivos)}] 📹 {arquivo_origem.name}")
 
-            # Arquivo abaixo do piso mínimo — economia real é mínima e correção
-            # VFR pode levar horas; move direto para saída.
-            if tamanho_original < self.LIMIAR_MINIMO_MB:
+            # Arquivo abaixo do piso mínimo — se já é MP4 move direto (economia mínima
+            # e correção VFR pode levar horas). Se é outro formato, converte para MP4.
+            if tamanho_original < self.LIMIAR_MINIMO_MB and arquivo_origem.suffix.lower() == '.mp4':
                 print(f"   ⏩ Muito pequeno ({tamanho_original:.1f}MB < {self.LIMIAR_MINIMO_MB}MB) — movendo sem encode")
                 destino = pasta_saida / arquivo_origem.name
                 shutil.move(str(arquivo_origem), str(destino))
