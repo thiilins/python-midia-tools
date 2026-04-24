@@ -686,8 +686,10 @@ class CompressorVideo:
         filtro_audio = "aresample=async=1" if aplicar_correcoes else None
         audio_codec_original = info_video.get("audio_codec", "")
 
-        if not aplicar_correcoes and audio_codec_original in ("aac", "mp3", "opus"):
-            # Copia áudio sem re-encodar — elimina processamento de áudio completamente
+        fonte_mp4 = arquivo_entrada.suffix.lower() == '.mp4'
+        if not aplicar_correcoes and fonte_mp4 and audio_codec_original in ("aac", "mp3"):
+            # Copia áudio só quando fonte é MP4 e codec é compatível com MP4
+            # Opus/Vorbis (WebM) e outros não-MP4 precisam de re-encode → AAC
             comando.extend(["-c:a", "copy"])
         else:
             comando.extend(["-c:a", "aac", "-b:a", "96k", "-ac", "2"])
