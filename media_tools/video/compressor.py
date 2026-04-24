@@ -44,6 +44,10 @@ class CompressorVideo:
     # Abaixo → conteúdo já eficiente; AMF CBR não consegue reduzir de forma confiável.
     # 6.0 bpp/s ≈ 5500 kbps em 720p / 12400 kbps em 1080p.
     HEVC_BPP_SKIP_LIMIT = 8.0
+    # Arquivos com bpp/s abaixo deste limite já estão tão comprimidos que
+    # o encode não consegue reduzir o tamanho — skip no passo 1.
+    # Aplica a qualquer codec em MP4. Ex: H.264 1350kbps 720p = 1.5 bpp/s → skip.
+    ENCODE_BPP_MINIMO = 2.0
     # Quando bpp > HEVC_BPP_SKIP_LIMIT, usa este ratio sobre o kbps do limiar como alvo.
     # Garante target agressivo proporcional à resolução, não 90% do source inflado.
     # Ex 720p: 6.0 bpp * 921600px / 1000 * 0.85 ≈ 4700 kbps.
@@ -925,17 +929,21 @@ class CompressorVideo:
             tamanho_mb = arquivo_origem.stat().st_size / (1024 * 1024)
             eh_mp4 = arquivo_origem.suffix.lower() == '.mp4'
 
-            # < 20MB qualquer codec/formato → encode nunca reduz, move direto
-            if tamanho_mb < 20:
-                destino = pasta_saida / arquivo_origem.name
-                shutil.move(str(arquivo_origem), str(destino))
-                return ('skip', arquivo_origem, tamanho_mb, 0)
-
             if eh_mp4 and tamanho_mb < 100:
                 info = self._obter_info_video(arquivo_origem)
                 codec = info.get('codec', '')
                 fps = float(info.get('fps') or 0)
+                w = info.get('width') or 1
+                h = info.get('height') or 1
+                bitrate_kbps = info.get('bitrate_total') or 0
+                bpp = (bitrate_kbps * 1000) / (w * h)
                 resolucao_ok = self._construir_filtro_resolucao(info) is None
+
+                # bpp/s baixo → já muito comprimido, encode não vai ajudar
+                if bpp < self.ENCODE_BPP_MINIMO and resolucao_ok:
+                    destino = pasta_saida / arquivo_origem.name
+                    shutil.move(str(arquivo_origem), str(destino))
+                    return ('skip', arquivo_origem, tamanho_mb, fps)
 
                 # HEVC + resolução ok + FPS ok → pula
                 if codec == 'hevc' and resolucao_ok and (fps <= self.MAX_FPS or fps == 0):
