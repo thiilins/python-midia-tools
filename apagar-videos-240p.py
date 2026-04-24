@@ -36,31 +36,35 @@ def main():
     raiz = Path(__file__).parent
     pastas = [raiz / "entrada" / "videos", raiz / "saida" / "videos"]
 
-    candidatos = []
+    todos = []
     for pasta in pastas:
         if not pasta.exists():
             continue
-        for arquivo in pasta.rglob("*"):
-            if arquivo.suffix.lower() not in EXTENSOES:
-                continue
-            w, h = obter_resolucao(arquivo)
-            lado_curto = min(w, h) if w and h else 0
-            if lado_curto and lado_curto <= RESOLUCAO_MAX:
-                candidatos.append((arquivo, w, h))
+        todos += [f for f in pasta.rglob("*") if f.suffix.lower() in EXTENSOES]
+
+    total = len(todos)
+    candidatos = []
+
+    for i, arquivo in enumerate(todos, 1):
+        print(f"\r  Verificando {i}/{total}...", end="", flush=True)
+        w, h = obter_resolucao(arquivo)
+        lado_curto = min(w, h) if w and h else 0
+        if lado_curto and lado_curto <= RESOLUCAO_MAX:
+            candidatos.append((arquivo, w, h))
+            print(f"\r  🎯 {w}x{h}  {arquivo.name:<60}")
+
+    print(f"\r{'':80}")  # limpa linha do contador
 
     if not candidatos:
-        print("Nenhum vídeo 240p encontrado.")
+        print("Nenhum vídeo ≤ 240p encontrado.")
         return
 
-    print(f"\n{'[DRY-RUN] ' if not args.apagar else ''}Vídeos ≤ 240p encontrados: {len(candidatos)}\n")
-    for arquivo, w, h in candidatos:
-        print(f"  {w}x{h}  {arquivo}")
+    print(f"\n{'[DRY-RUN] ' if not args.apagar else ''}Total: {len(candidatos)} vídeos ≤ 240p\n")
 
     if not args.apagar:
-        print(f"\n⚠️  Dry-run — nenhum arquivo movido. Use --apagar para mover para a lixeira.")
+        print("⚠️  Dry-run — nenhum arquivo movido. Use --apagar para mover para a lixeira.")
         return
 
-    print()
     movidos = 0
     for arquivo, w, h in candidatos:
         try:
