@@ -947,6 +947,19 @@ class CompressorVideo:
             codec_fonte = info_antes.get('codec', '')
             _max_bitrate_override = None
 
+            # HEVC + MP4 + < 100MB → já otimizado, move direto
+            # H.264 ou não-MP4 → sempre tenta converter
+            if (codec_fonte == 'hevc'
+                    and arquivo_origem.suffix.lower() == '.mp4'
+                    and tamanho_original < 100):
+                print(f"   ⏩ HEVC/MP4 pequeno ({tamanho_original:.1f}MB) — pulando")
+                destino = pasta_saida / arquivo_origem.name
+                shutil.move(str(arquivo_origem), str(destino))
+                total_original_mb += tamanho_original
+                total_novo_mb += tamanho_original
+                pulados += 1
+                continue
+
             _max_bitrate_salvo = self.max_bitrate
             if _max_bitrate_override:
                 self.max_bitrate = _max_bitrate_override
