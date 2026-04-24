@@ -56,6 +56,9 @@ class CompressorVideo:
     # 2 GB é diferente de uma gravação de 4h com 9 GB (28 MB/min vs 1000 MB/min).
     # Nesses casos o target é source_kbps × HEVC_BPP_TARGET_RATIO.
     HEVC_FORCA_MB_POR_MIN = 25  # ex: 4h 9GB = 28 MB/min → força; 8min 133MB = 17 → skip
+    # Abaixo deste tamanho, move direto para saída sem encode.
+    # Economia real é mínima e correção VFR pode levar horas em arquivos pequenos.
+    LIMIAR_MINIMO_MB = 50
 
     # Presets de compressão otimizados para H.265
     PRESETS = {
@@ -916,11 +919,23 @@ class CompressorVideo:
 
             arquivo_destino = pasta_saida / (arquivo_origem.stem + ".mp4")
 
-            # Obtém informações antes
-            info_antes = self._obter_info_video(arquivo_origem)
             tamanho_original = arquivo_origem.stat().st_size / (1024 * 1024)
 
             print(f"\n[{i}/{len(arquivos)}] 📹 {arquivo_origem.name}")
+
+            # Arquivo abaixo do piso mínimo — economia real é mínima e correção
+            # VFR pode levar horas; move direto para saída.
+            if tamanho_original < self.LIMIAR_MINIMO_MB:
+                print(f"   ⏩ Muito pequeno ({tamanho_original:.1f}MB < {self.LIMIAR_MINIMO_MB}MB) — movendo sem encode")
+                destino = pasta_saida / arquivo_origem.name
+                shutil.move(str(arquivo_origem), str(destino))
+                total_original_mb += tamanho_original
+                total_novo_mb += tamanho_original
+                pulados += 1
+                continue
+
+            # Obtém informações antes
+            info_antes = self._obter_info_video(arquivo_origem)
             print(
                 f"   Antes: {info_antes['width']}x{info_antes['height']} | "
                 f"{info_antes['codec']} | "
