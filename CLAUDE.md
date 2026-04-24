@@ -58,6 +58,7 @@ python-media-tools/
 - `bufsize 2M` hardcoded é inadequado para streams de alto bitrate (ex: 6981kbps) — calcular como `2× maxrate`
 - Cap maxrate em 100% do original sem margem — overhead de container (~0.7%) já ultrapassa; usar 90%
 - Não derivar bitrate de `bit_rate` do ffprobe para VFR — impreciso; calcular por `file_size×8/duração`
+- Não encodar HEVC→HEVC na mesma resolução sem hard `max_bitrate` no preset — AMF CBR pode não respeitar o teto e a re-compressão tende a produzir arquivo igual ou maior; pré-check em `processar()` faz skip instantâneo
 
 ## Concepts
 
@@ -87,6 +88,7 @@ python-media-tools/
 | ConversorFPS usa H.264 CRF 16 | Intermediate alta qualidade para H.265 posterior | 13-04-2026 |
 | Encode ≥ original → apaga encode, move original para saída | Pasta saída sempre completa independente do resultado | 23-04-2026 |
 | maxrate = file_size×8/duration×0.90 (não bit_rate ffprobe) | bit_rate impreciso em VFR; 90% absorve overhead de container | 23-04-2026 |
+| Pré-check HEVC→HEVC sem downscale → skip instantâneo | AMF CBR pode ignorar teto em re-encode HEVC→HEVC; 22min de encode descartado | 23-04-2026 |
 | hevc_amf usa cbr quando maxrate definido | vbr_peak ignora maxrate mesmo com -b:v — cbr é único modo confiável | 23-04-2026 |
 | bufsize = 2× maxrate (dinâmico) | bufsize 2M fixo inadequado para streams >2000kbps | 23-04-2026 |
 | CompressorWebVideo usa libx264 (não libx265) | H.264 = compatibilidade máxima com browsers/players web; faststart habilita seek antes do download completo | 23-04-2026 |

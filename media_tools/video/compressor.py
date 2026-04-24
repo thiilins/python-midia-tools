@@ -860,6 +860,20 @@ class CompressorVideo:
                 else f"{tamanho_original:.2f}MB"
             )
 
+            # Pré-check: se já é HEVC e não precisa de downscale, o re-encode raramente
+            # reduz tamanho (HEVC→HEVC mesma resolução tende a produzir arquivo igual ou maior).
+            # Com um hard max_bitrate no preset, ainda faz sentido forçar o teto.
+            codec_fonte = info_antes.get('codec', '')
+            precisa_downscale = self._construir_filtro_resolucao(info_antes) is not None
+            if codec_fonte == 'hevc' and not precisa_downscale and not self.max_bitrate:
+                print(f"   ⏩ Já é HEVC na resolução alvo — pulando re-encode (sem ganho esperado)")
+                destino_original = pasta_saida / arquivo_origem.name
+                shutil.move(str(arquivo_origem), str(destino_original))
+                total_original_mb += tamanho_original
+                total_novo_mb += tamanho_original
+                pulados += 1
+                continue
+
             sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
 
             # Fallback para CPU quando GPU falha (dimensões incomuns, VFR, etc.)
