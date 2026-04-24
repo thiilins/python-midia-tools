@@ -39,6 +39,15 @@ class CompressorVideo:
     # Extensões suportadas
     EXTENSOES_VALIDAS = {".mp4", ".m4v", ".mov"}
 
+    # Limiar de bpp/s acima do qual HEVC→HEVC ainda vale o encode.
+    # Abaixo → conteúdo já eficiente; AMF CBR não consegue reduzir de forma confiável.
+    # 6.0 bpp/s ≈ 5500 kbps em 720p / 12400 kbps em 1080p.
+    HEVC_BPP_SKIP_LIMIT = 6.0
+    # Quando bpp > HEVC_BPP_SKIP_LIMIT, usa este ratio sobre o kbps do limiar como alvo.
+    # Garante target agressivo proporcional à resolução, não 90% do source inflado.
+    # Ex 720p: 6.0 bpp * 921600px / 1000 * 0.85 ≈ 4700 kbps.
+    HEVC_BPP_TARGET_RATIO = 0.85
+
     # Presets de compressão otimizados para H.265
     PRESETS = {
         "balanced_compression": {
@@ -860,35 +869,59 @@ class CompressorVideo:
                 else f"{tamanho_original:.2f}MB"
             )
 
-            # Pré-check: se já é HEVC e não precisa de downscale, o re-encode raramente
-            # reduz tamanho (HEVC→HEVC mesma resolução tende a produzir arquivo igual ou maior).
-            # Com um hard max_bitrate no preset, ainda faz sentido forçar o teto.
+            # Pré-check: HEVC + sem downscale + sem hard max_bitrate no preset.
+            # Re-encode HEVC→HEVC raramente reduz tamanho — AMF CBR pode ignorar o teto.
+            # Se bpp ≤ HEVC_BPP_SKIP_LIMIT → já eficiente, skip instantâneo.
+            # Se bpp > limite → sobre-encodado; aplica maxrate proporcional à resolução
+            # (HEVC_BPP_SKIP_LIMIT × pixels × HEVC_BPP_TARGET_RATIO) para dar ao encoder
+            # um alvo agressivo real, não apenas 90% do source inflado.
             codec_fonte = info_antes.get('codec', '')
             precisa_downscale = self._construir_filtro_resolucao(info_antes) is not None
+            _max_bitrate_override = None
+
             if codec_fonte == 'hevc' and not precisa_downscale and not self.max_bitrate:
-                print(f"   ⏩ Já é HEVC na resolução alvo — pulando re-encode (sem ganho esperado)")
-                destino_original = pasta_saida / arquivo_origem.name
-                shutil.move(str(arquivo_origem), str(destino_original))
-                total_original_mb += tamanho_original
-                total_novo_mb += tamanho_original
-                pulados += 1
-                continue
+                bitrate_kbps = info_antes.get('bitrate_total') or 0
+                largura = info_antes.get('width') or 1
+                altura = info_antes.get('height') or 1
+                bpp = (bitrate_kbps * 1000) / (largura * altura)
+                if bpp <= self.HEVC_BPP_SKIP_LIMIT:
+                    print(f"   ⏩ HEVC eficiente ({bpp:.1f} bpp/s ≤ {self.HEVC_BPP_SKIP_LIMIT}) — pulando re-encode")
+                    destino_original = pasta_saida / arquivo_origem.name
+                    shutil.move(str(arquivo_origem), str(destino_original))
+                    total_original_mb += tamanho_original
+                    total_novo_mb += tamanho_original
+                    pulados += 1
+                    continue
+                else:
+                    limite_kbps = int(self.HEVC_BPP_SKIP_LIMIT * largura * altura / 1000)
+                    target_kbps = int(limite_kbps * self.HEVC_BPP_TARGET_RATIO)
+                    _max_bitrate_override = f"{target_kbps}k"
+                    print(
+                        f"   ⚠️  HEVC sobre-encodado ({bpp:.1f} bpp/s > {self.HEVC_BPP_SKIP_LIMIT})"
+                        f" — alvo {target_kbps} kbps ({int(self.HEVC_BPP_TARGET_RATIO*100)}% de {limite_kbps} kbps)"
+                    )
 
-            sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
-
-            # Fallback para CPU quando GPU falha (dimensões incomuns, VFR, etc.)
-            if not sucesso and self.encoder_gpu:
-                # Remove arquivo corrompido gerado pela tentativa falha
-                if arquivo_destino.exists():
-                    try:
-                        arquivo_destino.unlink()
-                    except OSError:
-                        pass
-                print(f"   🔄 GPU falhou, tentando CPU (libx265)...")
-                encoder_backup = self.encoder_gpu
-                self.encoder_gpu = None
+            _max_bitrate_salvo = self.max_bitrate
+            if _max_bitrate_override:
+                self.max_bitrate = _max_bitrate_override
+            try:
                 sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
-                self.encoder_gpu = encoder_backup
+
+                # Fallback para CPU quando GPU falha (dimensões incomuns, VFR, etc.)
+                if not sucesso and self.encoder_gpu:
+                    # Remove arquivo corrompido gerado pela tentativa falha
+                    if arquivo_destino.exists():
+                        try:
+                            arquivo_destino.unlink()
+                        except OSError:
+                            pass
+                    print(f"   🔄 GPU falhou, tentando CPU (libx265)...")
+                    encoder_backup = self.encoder_gpu
+                    self.encoder_gpu = None
+                    sucesso, erro = self._converter_video(arquivo_origem, arquivo_destino, info_antes)
+                    self.encoder_gpu = encoder_backup
+            finally:
+                self.max_bitrate = _max_bitrate_salvo
 
             if sucesso and arquivo_destino.exists():
                 tamanho_novo = arquivo_destino.stat().st_size / (1024 * 1024)

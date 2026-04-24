@@ -3,7 +3,8 @@
     "allow": [
       "Skill(start-session)",
       "Skill(resume-vault)",
-      "Skill(update-config)"
+      "Skill(update-config)",
+      "Skill(sync-obsidian)"
     ]
   }
 }
