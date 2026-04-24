@@ -42,7 +42,7 @@ class CompressorVideo:
     # Limiar de bpp/s acima do qual HEVC→HEVC ainda vale o encode.
     # Abaixo → conteúdo já eficiente; AMF CBR não consegue reduzir de forma confiável.
     # 6.0 bpp/s ≈ 5500 kbps em 720p / 12400 kbps em 1080p.
-    HEVC_BPP_SKIP_LIMIT = 6.0
+    HEVC_BPP_SKIP_LIMIT = 8.0
     # Quando bpp > HEVC_BPP_SKIP_LIMIT, usa este ratio sobre o kbps do limiar como alvo.
     # Garante target agressivo proporcional à resolução, não 90% do source inflado.
     # Ex 720p: 6.0 bpp * 921600px / 1000 * 0.85 ≈ 4700 kbps.
@@ -55,7 +55,10 @@ class CompressorVideo:
     # Valida duração × tamanho em vez de tamanho absoluto — um clipe de 2min com
     # 2 GB é diferente de uma gravação de 4h com 9 GB (28 MB/min vs 1000 MB/min).
     # Nesses casos o target é source_kbps × HEVC_BPP_TARGET_RATIO.
-    HEVC_FORCA_MB_POR_MIN = 25  # ex: 4h 9GB = 28 MB/min → força; 8min 133MB = 17 → skip
+    HEVC_FORCA_MB_POR_MIN = 25   # ex: 4h 9GB = 28 MB/min → força; 8min 133MB = 17 → skip
+    # Tamanho mínimo para o gatilho MB/min — arquivos pequenos não justificam o encode
+    # mesmo com MB/min alto (bastos 74MB 26.8 MB/min ≠ flyckerx 8.3GB 28.6 MB/min)
+    HEVC_FORCA_MIN_MB = 500
     # Abaixo deste tamanho, move direto para saída sem encode.
     # Economia real é mínima e correção VFR pode levar horas em arquivos pequenos.
     LIMIAR_MINIMO_MB = 50
@@ -961,7 +964,7 @@ class CompressorVideo:
                 bpp = (bitrate_kbps * 1000) / (largura * altura)
                 duracao_min = (info_antes.get('duracao') or 0) / 60
                 mb_por_min = (tamanho_original / duracao_min) if duracao_min > 0 else 0
-                if bpp <= self.HEVC_BPP_SKIP_LIMIT and mb_por_min <= self.HEVC_FORCA_MB_POR_MIN:
+                if bpp <= self.HEVC_BPP_SKIP_LIMIT and (mb_por_min <= self.HEVC_FORCA_MB_POR_MIN or tamanho_original < self.HEVC_FORCA_MIN_MB):
                     print(f"   ⏩ HEVC eficiente ({bpp:.1f} bpp/s, {mb_por_min:.1f} MB/min) — pulando re-encode")
                     destino_original = pasta_saida / arquivo_origem.name
                     shutil.move(str(arquivo_origem), str(destino_original))
