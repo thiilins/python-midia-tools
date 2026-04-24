@@ -915,9 +915,35 @@ class CompressorVideo:
         total_original_mb = 0.0
         total_novo_mb = 0.0
 
-        # Processamento sequencial
-        for i, arquivo_origem in enumerate(arquivos, 1):
-            # Verifica recursos antes de processar (apenas em modo CPU — GPU não tem esse gargalo)
+        # ── PASSO 1: move skips instantaneamente ─────────────────────────────
+        # HEVC + MP4 + < 100MB + FPS ≤ MAX_FPS → já otimizado, sem encode
+        # Reduz a fila visualmente antes de iniciar os encodes pesados.
+        converter = []
+        print(f"\n⚡ Passo 1/2 — triagem rápida ({len(arquivos)} arquivos)...")
+        for arquivo_origem in arquivos:
+            tamanho_mb = arquivo_origem.stat().st_size / (1024 * 1024)
+            eh_mp4 = arquivo_origem.suffix.lower() == '.mp4'
+
+            if eh_mp4 and tamanho_mb < 100:
+                info = self._obter_info_video(arquivo_origem)
+                codec = info.get('codec', '')
+                fps = float(info.get('fps') or 0)
+                if codec == 'hevc' and (fps <= self.MAX_FPS or fps == 0):
+                    destino = pasta_saida / arquivo_origem.name
+                    shutil.move(str(arquivo_origem), str(destino))
+                    total_original_mb += tamanho_mb
+                    total_novo_mb += tamanho_mb
+                    pulados += 1
+                    print(f"   ⏩ {arquivo_origem.name} ({tamanho_mb:.1f}MB, HEVC, {fps:.0f}fps)")
+                    continue
+
+            converter.append(arquivo_origem)
+
+        print(f"   ✅ {pulados} pulados, {len(converter)} para converter\n")
+
+        # ── PASSO 2: encode dos arquivos restantes ────────────────────────────
+        for i, arquivo_origem in enumerate(converter, 1):
+            # Verifica recursos antes de processar (apenas em modo CPU)
             if not self.encoder_gpu and not verificar_recursos_disponiveis(self.limite_cpu, self.limite_memoria):
                 print(
                     f"\n⏸️  Aguardando recursos disponíveis (CPU < {self.limite_cpu:.0f}%, Memória < {self.limite_memoria:.0f}%)..."
@@ -928,11 +954,9 @@ class CompressorVideo:
                     print("⚠️  Timeout aguardando recursos. Continuando com cautela...")
 
             arquivo_destino = pasta_saida / (arquivo_origem.stem + ".mp4")
-
             tamanho_original = arquivo_origem.stat().st_size / (1024 * 1024)
 
-            print(f"\n[{i}/{len(arquivos)}] 📹 {arquivo_origem.name}")
-
+            print(f"\n[{i}/{len(converter)}] 📹 {arquivo_origem.name}")
 
             # Obtém informações antes
             info_antes = self._obter_info_video(arquivo_origem)
@@ -946,21 +970,6 @@ class CompressorVideo:
 
             codec_fonte = info_antes.get('codec', '')
             _max_bitrate_override = None
-
-            # HEVC + MP4 + < 100MB + FPS ≤ MAX_FPS → já otimizado, move direto
-            # H.264 ou não-MP4 ou FPS alto → sempre tenta converter
-            fps_fonte = float(info_antes.get('fps') or 0)
-            if (codec_fonte == 'hevc'
-                    and arquivo_origem.suffix.lower() == '.mp4'
-                    and tamanho_original < 100
-                    and (fps_fonte <= self.MAX_FPS or fps_fonte == 0)):
-                print(f"   ⏩ HEVC/MP4 pequeno ({tamanho_original:.1f}MB, {fps_fonte:.0f}fps) — pulando")
-                destino = pasta_saida / arquivo_origem.name
-                shutil.move(str(arquivo_origem), str(destino))
-                total_original_mb += tamanho_original
-                total_novo_mb += tamanho_original
-                pulados += 1
-                continue
 
             _max_bitrate_salvo = self.max_bitrate
             if _max_bitrate_override:
@@ -1053,7 +1062,7 @@ class CompressorVideo:
                 sucessos += 1
 
                 # Pausa entre vídeos
-                if i < len(arquivos):
+                if i < len(converter):
                     pausar_entre_processamentos(self.pausa_entre_videos)
             else:
                 # Remove arquivo corrompido/incompleto gerado pela falha
