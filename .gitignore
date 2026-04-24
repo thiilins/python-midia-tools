@@ -257,6 +257,10 @@ entrada/**/*
 saida/**/*
 !saida/**/.gitkeep
 
+
+configs/cut-settings.json
+configs/cut-settings.txt
+
 # Logs de processamento
 historico_processamento.log
 *.log
