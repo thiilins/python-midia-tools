@@ -925,8 +925,8 @@ class CompressorVideo:
             tamanho_mb = arquivo_origem.stat().st_size / (1024 * 1024)
             eh_mp4 = arquivo_origem.suffix.lower() == '.mp4'
 
-            # < 10MB qualquer codec/formato → insignificante, move direto
-            if tamanho_mb < 10:
+            # < 20MB qualquer codec/formato → encode nunca reduz, move direto
+            if tamanho_mb < 20:
                 destino = pasta_saida / arquivo_origem.name
                 shutil.move(str(arquivo_origem), str(destino))
                 return ('skip', arquivo_origem, tamanho_mb, 0)
