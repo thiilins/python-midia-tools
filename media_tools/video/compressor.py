@@ -50,7 +50,7 @@ class CompressorVideo:
     # Offset de QP aplicado ao av1_amf sobre o CRF do preset.
     # AV1 é mais eficiente que HEVC — +4 QP mantém qualidade visual equivalente
     # ao HEVC no mesmo CRF, com arquivos ~15-25% menores.
-    AV1_QP_OFFSET = 4
+    AV1_QP_OFFSET = 10
     # Densidade MB/min acima da qual força re-encode mesmo com bpp já eficiente.
     # Valida duração × tamanho em vez de tamanho absoluto — um clipe de 2min com
     # 2 GB é diferente de uma gravação de 4h com 9 GB (28 MB/min vs 1000 MB/min).
@@ -952,63 +952,8 @@ class CompressorVideo:
                 else f"{tamanho_original:.2f}MB"
             )
 
-            # Pré-check: HEVC + sem downscale + sem hard max_bitrate no preset.
-            # Re-encode HEVC→HEVC raramente reduz tamanho — AMF CBR pode ignorar o teto.
-            # Se bpp ≤ HEVC_BPP_SKIP_LIMIT → já eficiente, skip instantâneo.
-            # Se bpp > limite → sobre-encodado; aplica maxrate proporcional à resolução
-            # (HEVC_BPP_SKIP_LIMIT × pixels × HEVC_BPP_TARGET_RATIO) para dar ao encoder
-            # um alvo agressivo real, não apenas 90% do source inflado.
             codec_fonte = info_antes.get('codec', '')
-            precisa_downscale = self._construir_filtro_resolucao(info_antes) is not None
             _max_bitrate_override = None
-
-            if codec_fonte == 'hevc' and not precisa_downscale and not self.max_bitrate:
-                bitrate_kbps = info_antes.get('bitrate_total') or 0
-                largura = info_antes.get('width') or 1
-                altura = info_antes.get('height') or 1
-                bpp = (bitrate_kbps * 1000) / (largura * altura)
-                duracao_min = (info_antes.get('duracao') or 0) / 60
-                mb_por_min = (tamanho_original / duracao_min) if duracao_min > 0 else 0
-                if bpp <= self.HEVC_BPP_SKIP_LIMIT and (mb_por_min <= self.HEVC_FORCA_MB_POR_MIN or tamanho_original < self.HEVC_FORCA_MIN_MB):
-                    print(f"   ⏩ HEVC eficiente ({bpp:.1f} bpp/s, {mb_por_min:.1f} MB/min) — pulando re-encode")
-                    destino_original = pasta_saida / arquivo_origem.name
-                    shutil.move(str(arquivo_origem), str(destino_original))
-                    total_original_mb += tamanho_original
-                    total_novo_mb += tamanho_original
-                    pulados += 1
-                    continue
-                elif bpp <= self.HEVC_BPP_SKIP_LIMIT:
-                    # bpp ok mas gravação longa/densa — tamanho absoluto justifica o encode
-                    target_kbps = int(bitrate_kbps * self.HEVC_BPP_TARGET_RATIO)
-                    usando_av1 = self.encoder_gpu in self.AV1_GPU_ENCODERS
-                    if not usando_av1:
-                        _max_bitrate_override = f"{target_kbps}k"
-                    modo = f"AV1 CQP (ref ~{target_kbps} kbps)" if usando_av1 else f"alvo {target_kbps} kbps ({int(self.HEVC_BPP_TARGET_RATIO*100)}% do source)"
-                    print(f"   ⚠️  HEVC denso ({mb_por_min:.1f} MB/min > {self.HEVC_FORCA_MB_POR_MIN}) — {modo}")
-                else:
-                    limite_kbps = int(self.HEVC_BPP_SKIP_LIMIT * largura * altura / 1000)
-                    target_kbps = int(limite_kbps * self.HEVC_BPP_TARGET_RATIO)
-                    usando_av1 = self.encoder_gpu in self.AV1_GPU_ENCODERS
-                    if not usando_av1:
-                        _max_bitrate_override = f"{target_kbps}k"
-                    modo = f"AV1 CQP (ref ~{target_kbps} kbps)" if usando_av1 else f"alvo {target_kbps} kbps ({int(self.HEVC_BPP_TARGET_RATIO*100)}% de {limite_kbps} kbps)"
-                    print(f"   ⚠️  HEVC sobre-encodado ({bpp:.1f} bpp/s > {self.HEVC_BPP_SKIP_LIMIT}) — {modo}")
-
-            # Pré-check H.264: se bpp já eficiente, AV1 não consegue comprimir
-            # (encoder reproduz artefatos do H.264 usando bits similares ou mais).
-            if codec_fonte in ('h264', 'avc') and not self.max_bitrate:
-                bitrate_kbps = info_antes.get('bitrate_total') or 0
-                largura = info_antes.get('width') or 1
-                altura = info_antes.get('height') or 1
-                bpp = (bitrate_kbps * 1000) / (largura * altura)
-                if bpp <= self.H264_BPP_SKIP_LIMIT:
-                    print(f"   ⏩ H.264 eficiente ({bpp:.1f} bpp/s ≤ {self.H264_BPP_SKIP_LIMIT}) — movendo sem re-encode")
-                    destino_original = pasta_saida / arquivo_origem.name
-                    shutil.move(str(arquivo_origem), str(destino_original))
-                    total_original_mb += tamanho_original
-                    total_novo_mb += tamanho_original
-                    pulados += 1
-                    continue
 
             _max_bitrate_salvo = self.max_bitrate
             if _max_bitrate_override:
