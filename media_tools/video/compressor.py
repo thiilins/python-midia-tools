@@ -941,7 +941,7 @@ class CompressorVideo:
                 codec = info.get('codec', '')
                 fps = float(info.get('fps') or 0)
                 resolucao_ok = self._construir_filtro_resolucao(info) is None
-                if codec == 'hevc' and resolucao_ok and (fps <= self.MAX_FPS or fps == 0):
+                if codec == 'hevc' and resolucao_ok and 0 < fps <= self.MAX_FPS:
                     destino = pasta_saida / arquivo_origem.name
                     shutil.move(str(arquivo_origem), str(destino))
                     return ('skip', arquivo_origem, tamanho_mb, fps)
