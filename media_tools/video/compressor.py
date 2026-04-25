@@ -929,23 +929,18 @@ class CompressorVideo:
             tamanho_mb = arquivo_origem.stat().st_size / (1024 * 1024)
             eh_mp4 = arquivo_origem.suffix.lower() == '.mp4'
 
-            if eh_mp4 and tamanho_mb < 100:
+            # < 1MB → insignificante, move direto
+            if tamanho_mb < 1:
+                destino = pasta_saida / arquivo_origem.name
+                shutil.move(str(arquivo_origem), str(destino))
+                return ('skip', arquivo_origem, tamanho_mb, 0)
+
+            # HEVC + MP4 + resolução ok + FPS ok → já otimizado, move direto
+            if eh_mp4:
                 info = self._obter_info_video(arquivo_origem)
                 codec = info.get('codec', '')
                 fps = float(info.get('fps') or 0)
-                w = info.get('width') or 1
-                h = info.get('height') or 1
-                bitrate_kbps = info.get('bitrate_total') or 0
-                bpp = (bitrate_kbps * 1000) / (w * h)
                 resolucao_ok = self._construir_filtro_resolucao(info) is None
-
-                # bpp/s baixo → já muito comprimido, encode não vai ajudar
-                if bpp < self.ENCODE_BPP_MINIMO and resolucao_ok:
-                    destino = pasta_saida / arquivo_origem.name
-                    shutil.move(str(arquivo_origem), str(destino))
-                    return ('skip', arquivo_origem, tamanho_mb, fps)
-
-                # HEVC + resolução ok + FPS ok → pula
                 if codec == 'hevc' and resolucao_ok and (fps <= self.MAX_FPS or fps == 0):
                     destino = pasta_saida / arquivo_origem.name
                     shutil.move(str(arquivo_origem), str(destino))
