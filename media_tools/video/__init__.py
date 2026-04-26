@@ -15,6 +15,7 @@ from .analyzer import AnalisadorMidia
 from .fps_converter import ConversorFPS
 from .slicer import FatiadorVideo
 from .clipper import ClipperVideo
+from .merger2 import UnificadorVideo
 from .web_compressor import CompressorWebVideo
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
     "ConversorFPS",
     "FatiadorVideo",
     "ClipperVideo",
+    "UnificadorVideo",
     "CompressorWebVideo",
 ]

@@ -1,0 +1,18 @@
+[
+  {
+    "saida": "resultado_final.mp4",
+    "videos": [
+      "parte1.mp4",
+      "parte2.mp4",
+      "parte3.mp4"
+    ]
+  },
+  {
+    "saida": "outro_resultado.mp4",
+    "videos": [
+      "intro.mp4",
+      "conteudo.mp4",
+      "outro.mp4"
+    ]
+  }
+]
