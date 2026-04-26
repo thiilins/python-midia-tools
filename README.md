@@ -19,6 +19,7 @@ Ferramenta modular e padronizada para processamento de imagens e vídeos.
 
 - **Compressão H.265**: Comprime para 720p com H.265/HEVC — ~50% menor que H.264
 - **Cortador (copy mode)**: Extrai segmentos por timestamp instantaneamente, sem re-encode
+- **Fatiador batch**: Extrai e concatena segmentos de múltiplos vídeos via `cut-settings.json`
 - **Analisador de pasta**: Inventário técnico com codec, resolução, FPS e estimativa de compressão
 - **Conversor de FPS**: Reduz 60fps → 30fps (~30-40% menor antes de comprimir)
 - **Otimização H.264**: Otimiza mantendo resolução original com H.264
@@ -286,6 +287,7 @@ python-media-tools/
 ├── estabilizador-video.py        # Estabilizar vídeos
 ├── detector-duplicatas-videos.py # Duplicatas de vídeos
 ├── cortar-video.py               # Cortar clips (copy mode)
+├── fatiar-video.py               # Fatiar batch via cut-settings.json (copy mode)
 ├── analisar-pasta.py             # Analisar pasta de vídeos
 ├── converter-fps.py              # Converter FPS
 ├── requirements.txt
@@ -493,6 +495,42 @@ Modo interativo — lista vídeos disponíveis e solicita timestamps via termina
 - **Pasta de saída**: `saida/clips/`
 - **Formatos de tempo**: `HH:MM:SS`, `MM:SS` ou segundos
 - Permite cortar múltiplos segmentos em sequência
+
+### Fatiador de Vídeo (fatiar-video.py)
+
+Extrai e concatena segmentos de múltiplos vídeos em batch a partir de um arquivo de configuração. Copy mode — sem re-encode, instantâneo.
+
+- **Pasta de entrada**: `entrada/videos/`
+- **Pasta de saída**: `saida/videos/` (mesmo nome do original)
+- **Configuração**: `configs/cut-settings.json` ou `configs/cut-settings.txt` (JSON tem prioridade)
+- **1 segmento**: move diretamente (sem concat)
+- **N segmentos**: concatena via concat demuxer
+
+**Formato JSON** (`configs/cut-settings.json`):
+```json
+[
+  {
+    "arquivo": "video.mp4",
+    "segmentos": ["00:00:00-00:10:00", "00:12:00-00:20:00"]
+  },
+  {
+    "arquivo": "outro.mp4",
+    "segmentos": ["00:05:00-00:30:00"]
+  }
+]
+```
+
+**Formato TXT** (`configs/cut-settings.txt`):
+```
+video.mp4: 00:00:00-00:10:00|00:12:00-00:20:00
+outro.mp4: 00:05:00-00:30:00
+```
+
+```bash
+python fatiar-video.py                          # processa cut-settings auto-detectado
+python fatiar-video.py --delete                 # apaga originais após sucesso
+python fatiar-video.py --settings outro.json    # settings em path customizado
+```
 
 ### Analisador de Pasta (analisar-pasta.py)
 
