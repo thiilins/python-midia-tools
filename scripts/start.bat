@@ -141,7 +141,8 @@ set "SCRIPTS[18]=cortar-video.py"
 set "SCRIPTS[19]=analisar-pasta.py"
 set "SCRIPTS[20]=converter-fps.py"
 set "SCRIPTS[21]=fatiar-video.py"
-set "SCRIPTS[22]=comprimir-web-video.py"
+set "SCRIPTS[22]=clipar-video.py"
+set "SCRIPTS[23]=comprimir-web-video.py"
 
 if "%OPCAO%"=="0" (
     popd

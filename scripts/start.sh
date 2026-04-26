@@ -109,7 +109,8 @@ declare -A SCRIPTS=(
     [19]="analisar-pasta.py"
     [20]="converter-fps.py"
     [21]="fatiar-video.py"
-    [22]="comprimir-web-video.py"
+    [22]="clipar-video.py"
+    [23]="comprimir-web-video.py"
 )
 
 if [ "$OPCAO" = "0" ]; then
