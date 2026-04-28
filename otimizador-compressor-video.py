@@ -9,9 +9,27 @@ Inclui barra de progresso em tempo real e opções de redução de resolução.
 Usa H.265 (HEVC) que comprime 40-50% melhor que H.264.
 """
 
+import json
 import sys
 import os
+from pathlib import Path
 from media_tools.video.compressor import CompressorVideo
+
+
+def _carregar_config_paths(config_path: Path = None):
+    """Lê pasta_entrada/pasta_saida de configs/compressor-settings.json."""
+    if config_path is None:
+        config_path = Path(__file__).parent / "configs" / "compressor-settings.json"
+    if not config_path.exists():
+        return None, None
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            dados = json.load(f)
+        entrada = dados.get("pasta_entrada")
+        saida = dados.get("pasta_saida")
+        return (Path(entrada) if entrada else None), (Path(saida) if saida else None)
+    except Exception:
+        return None, None
 
 
 def main():
@@ -85,6 +103,9 @@ def main():
     # Processa argumentos
     deletar_originais = True
     ordem_fila = "menor"
+    pasta_entrada_cli = None
+    pasta_saida_cli = None
+    config_path_cli = None
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -115,22 +136,38 @@ def main():
             os.environ["GPU_DEVICE"] = args[i + 1]
             i += 2
         elif args[i] in ["--ordem", "--order"] and i + 1 < len(args):
-            ordem_fila = args[i + 1]  # "menor" ou "maior"
+            ordem_fila = args[i + 1]
+            i += 2
+        elif args[i] in ["--entrada", "-i"] and i + 1 < len(args):
+            pasta_entrada_cli = Path(args[i + 1])
+            i += 2
+        elif args[i] in ["--saida", "-o"] and i + 1 < len(args):
+            pasta_saida_cli = Path(args[i + 1])
+            i += 2
+        elif args[i] in ["--config", "-c"] and i + 1 < len(args):
+            config_path_cli = Path(args[i + 1])
             i += 2
         else:
             i += 1
 
+    # Resolve pastas: CLI > config file > default
+    pasta_entrada_cfg, pasta_saida_cfg = _carregar_config_paths(config_path_cli)
+    pasta_entrada = pasta_entrada_cli or pasta_entrada_cfg
+    pasta_saida = pasta_saida_cli or pasta_saida_cfg
+
+    if pasta_entrada:
+        print(f"📂 Entrada: {pasta_entrada}")
+    if pasta_saida:
+        print(f"📂 Saída:   {pasta_saida}")
+
     try:
-        if preset_nome:
-            compressor = CompressorVideo(
-                preset_nome=preset_nome, corrigir_problemas=corrigir_problemas,
-                ordem_fila=ordem_fila,
-            )
-        else:
-            compressor = CompressorVideo(
-                preset_nome="master_720p", corrigir_problemas=corrigir_problemas,
-                ordem_fila=ordem_fila,
-            )
+        compressor = CompressorVideo(
+            pasta_entrada=pasta_entrada,
+            pasta_saida=pasta_saida,
+            preset_nome=preset_nome or "master_720p",
+            corrigir_problemas=corrigir_problemas,
+            ordem_fila=ordem_fila,
+        )
 
         compressor.processar(deletar_originais=deletar_originais)
     except KeyboardInterrupt:
